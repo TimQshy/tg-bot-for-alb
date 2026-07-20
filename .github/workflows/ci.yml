@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Syntax & dependency check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check syntax (all JS files)
+        run: |
+          find src -name '*.js' | xargs -I{} node --input-type=module --check < {}
+
+      - name: Verify required env vars are documented
+        run: |
+          grep -q "BOT_TOKEN"    .env.example
+          grep -q "DATABASE_URL" .env.example
+          grep -q "ADMIN_IDS"    .env.example
+          echo "All required env vars are documented"
