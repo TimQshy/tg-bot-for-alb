@@ -10,7 +10,7 @@ function getConfig_() {
       .split(',')
       .map(function (s) { return parseInt(s.trim(), 10); })
       .filter(function (n) { return !isNaN(n); }),
-    TIMEZONE: p.getProperty('TIMEZONE') || 'Europe/Moscow',
+    TIMEZONE: p.getProperty('TIMEZONE') || 'Asia/Bishkek',
     WEBHOOK_SECRET: p.getProperty('WEBHOOK_SECRET'),
   };
 }

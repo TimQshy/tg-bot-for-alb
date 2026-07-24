@@ -60,13 +60,13 @@ function forceText_(ss, sheetName, columnNames) {
 }
 
 // Run once with your real values, e.g. from the editor:
-//   setConfig('123456:ABC-DEF...', '111111111,222222222', 'Europe/Moscow')
+//   setConfig('123456:ABC-DEF...', '111111111,222222222', 'Asia/Bishkek')
 function setConfig(botToken, adminIds, timezone) {
   var secret = Utilities.getUuid();
   PropertiesService.getScriptProperties().setProperties({
     BOT_TOKEN: botToken,
     ADMIN_IDS: adminIds || '',
-    TIMEZONE: timezone || 'Europe/Moscow',
+    TIMEZONE: timezone || 'Asia/Bishkek',
     WEBHOOK_SECRET: secret,
   });
   Logger.log('Config saved. Webhook secret: ' + secret);

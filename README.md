@@ -59,7 +59,7 @@ clasp push
    замени тело функции аргументами, например:
    ```js
    function run() {
-     setConfig('123456:ABC-DEF_botToken', '111111111,222222222', 'Europe/Moscow');
+     setConfig('123456:ABC-DEF_botToken', '111111111,222222222', 'Asia/Bishkek');
    }
    ```
    и выполни `run`. Значения берутся так же, как раньше в `.env`:
