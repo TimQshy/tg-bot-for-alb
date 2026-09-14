@@ -1,16 +1,18 @@
 {
   "name": "beauty-salon-bot",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
-  "description": "Telegram bot for beauty salon booking",
+  "description": "WhatsApp bot for beauty salon booking",
   "scripts": {
     "start": "node src/bot.js",
-    "dev": "node --watch src/bot.js"
+    "dev": "node --watch src/bot.js",
+    "seed": "node src/seed.js",
+    "analyze-chats": "node src/scripts/analyzeChats.js"
   },
   "dependencies": {
-    "telegraf": "^4.16.3",
-    "pg": "^8.11.3",
+    "dotenv": "^16.4.1",
+    "express": "^4.19.2",
     "node-cron": "^3.0.3",
-    "dotenv": "^16.4.1"
+    "pg": "^8.11.3"
   }
 }

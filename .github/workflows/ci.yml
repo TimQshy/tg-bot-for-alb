@@ -1,4 +1,4 @@
-name: CI
+name: CI / Deploy
 
 on:
   push:
@@ -7,29 +7,28 @@ on:
     branches: [main]
 
 jobs:
+  # ── 1. Syntax check (runs on every push & PR) ───────────────────────────
   check:
-    name: Syntax & dependency check
+    name: Syntax check
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
+      - name: Install deps
         run: npm ci
 
-      - name: Check syntax (all JS files)
+      - name: Check JS syntax
         run: |
-          find src -name '*.js' | xargs -I{} node --input-type=module --check < {}
+          for f in $(find src -name '*.js'); do
+            node --input-type=module --check < "$f" && echo "OK: $f"
+          done
 
-      - name: Verify required env vars are documented
-        run: |
-          grep -q "BOT_TOKEN"    .env.example
-          grep -q "DATABASE_URL" .env.example
-          grep -q "ADMIN_IDS"    .env.example
-          echo "All required env vars are documented"
+  # ── 2. Deploy — handled automatically by Koyeb via GitHub integration ──
+  # Koyeb watches the main branch and redeploys on every push.
+  # No extra CI step needed.

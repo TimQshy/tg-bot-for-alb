@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Админка салона</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: #f5f2ef; margin: 0; color: #222; }
+  header {
+    background: #fff; padding: 14px 20px; display: flex; align-items: center;
+    justify-content: space-between; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  header h1 { font-size: 16px; margin: 0; }
+  header button { background: none; border: 1px solid #ddd; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  nav { display: flex; gap: 4px; padding: 12px 20px 0; }
+  nav button {
+    border: none; background: #eee; padding: 8px 16px; border-radius: 8px 8px 0 0;
+    cursor: pointer; font-size: 13px; color: #555;
+  }
+  nav button.active { background: #fff; color: #d6336c; font-weight: 600; }
+  main { padding: 16px 20px; max-width: 900px; margin: 0 auto; }
+  section { background: #fff; border-radius: 0 8px 8px 8px; padding: 16px; }
+  section[hidden] { display: none; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .toolbar input, .toolbar select { padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #eee; vertical-align: top; }
+  th { color: #888; font-weight: 500; font-size: 12px; }
+  .status-confirmed { color: #2b8a3e; }
+  .status-cancelled { color: #999; text-decoration: line-through; }
+  .status-completed { color: #495057; }
+  .actions button {
+    border: none; background: #f1f3f5; padding: 5px 10px; border-radius: 6px;
+    cursor: pointer; font-size: 12px; margin-right: 4px;
+  }
+  .actions button.danger { color: #d6336c; }
+  .reschedule-row input[type=date], .reschedule-row input[type=time] { width: 110px; }
+  .empty { color: #999; padding: 20px; text-align: center; }
+  .add-row input { width: 100%; padding: 5px 6px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+  .add-row td { padding-top: 12px; }
+  .hours-day { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee; }
+  .hours-day span { width: 110px; font-size: 13px; }
+  .hours-day input[type=time] { padding: 5px; border: 1px solid #ddd; border-radius: 6px; }
+  .hours-day button { border: none; background: #f1f3f5; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .msg { font-size: 12px; margin-left: 8px; }
+  .msg.ok { color: #2b8a3e; }
+  .msg.err { color: #d6336c; }
+</style>
+</head>
+<body>
+<header>
+  <h1>💅 Админка салона</h1>
+  <button id="logoutBtn">Выйти</button>
+</header>
+<nav>
+  <button class="tab-btn active" data-tab="appointments">Записи</button>
+  <button class="tab-btn" data-tab="services">Услуги</button>
+  <button class="tab-btn" data-tab="hours">Часы работы</button>
+</nav>
+<main>
+
+  <section id="tab-appointments">
+    <div class="toolbar">
+      <input type="date" id="apptDate">
+      <select id="apptMaster"><option value="">Все мастера</option></select>
+      <select id="apptStatus">
+        <option value="">Все статусы</option>
+        <option value="confirmed" selected>Подтверждённые</option>
+        <option value="cancelled">Отменённые</option>
+        <option value="completed">Завершённые</option>
+      </select>
+      <button id="apptReload">Обновить</button>
+      <button id="apptClearDate">Сбросить дату</button>
+    </div>
+    <div id="apptTableWrap"></div>
+  </section>
+
+  <section id="tab-services" hidden>
+    <table>
+      <thead>
+        <tr><th>Название</th><th>Мин</th><th>Цена ₽</th><th>Активна</th><th></th></tr>
+      </thead>
+      <tbody id="servicesBody"></tbody>
+      <tfoot>
+        <tr class="add-row">
+          <td><input id="newSvcName" placeholder="Новая услуга"></td>
+          <td><input id="newSvcDuration" type="number" value="60" style="width:60px"></td>
+          <td><input id="newSvcPrice" type="number" style="width:80px"></td>
+          <td></td>
+          <td><button id="newSvcAdd">Добавить</button></td>
+        </tr>
+      </tfoot>
+    </table>
+  </section>
+
+  <section id="tab-hours" hidden>
+    <div class="toolbar">
+      <select id="hoursMaster"></select>
+    </div>
+    <div id="hoursWrap"></div>
+  </section>
+
+</main>
+
+<script>
+const DAY_NAMES = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
+const STATUS_LABEL = { confirmed: 'подтверждена', cancelled: 'отменена', completed: 'завершена' };
+
+async function api(path, opts) {
+  const res = await fetch('/admin' + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (res.status === 401) { window.location.href = '/admin/login'; throw new Error('unauthorized'); }
+  if (!res.ok) throw await res.json().catch(() => ({ error: 'request_failed' }));
+  return res.json();
+}
+
+// ── Tabs ─────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('main > section').forEach(s => s.hidden = true);
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).hidden = false;
+  });
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await api('/logout', { method: 'POST' });
+  window.location.href = '/admin/login';
+});
+
+// ── Masters (shared dropdowns) ───────────────────────────────────────────
+let masters = [];
+async function loadMasters() {
+  masters = await api('/api/masters');
+  const apptSel = document.getElementById('apptMaster');
+  const hoursSel = document.getElementById('hoursMaster');
+  for (const m of masters) {
+    apptSel.insertAdjacentHTML('beforeend', `<option value="${m.id}">${escapeHtml(m.name)}</option>`);
+    hoursSel.insertAdjacentHTML('beforeend', `<option value="${m.id}">${escapeHtml(m.name)}</option>`);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
+// ── Appointments ─────────────────────────────────────────────────────────
+async function loadAppointments() {
+  const date = document.getElementById('apptDate').value;
+  const masterId = document.getElementById('apptMaster').value;
+  const status = document.getElementById('apptStatus').value;
+  const qs = new URLSearchParams();
+  if (date) qs.set('date', date);
+  if (masterId) qs.set('masterId', masterId);
+  if (status) qs.set('status', status);
+
+  const rows = await api('/api/appointments?' + qs.toString());
+  const wrap = document.getElementById('apptTableWrap');
+
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="empty">Ничего не найдено</div>';
+    return;
+  }
+
+  wrap.innerHTML = `<table>
+    <thead><tr><th>#</th><th>Дата</th><th>Время</th><th>Клиент</th><th>Услуга</th><th>Мастер</th><th>Статус</th><th></th></tr></thead>
+    <tbody>${rows.map(rowHtml).join('')}</tbody>
+  </table>`;
+
+  wrap.querySelectorAll('[data-cancel]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Отменить запись #' + btn.dataset.cancel + '?')) return;
+      await api(`/api/appointments/${btn.dataset.cancel}/cancel`, { method: 'POST' });
+      loadAppointments();
+    });
+  });
+
+  wrap.querySelectorAll('[data-reschedule-toggle]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = document.getElementById('resched-' + btn.dataset.rescheduleToggle);
+      row.style.display = row.style.display === 'none' ? '' : 'none';
+    });
+  });
+
+  wrap.querySelectorAll('[data-reschedule-save]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.rescheduleSave;
+      const date = document.getElementById('resched-date-' + id).value;
+      const startTime = document.getElementById('resched-start-' + id).value;
+      const endTime = document.getElementById('resched-end-' + id).value;
+      const msg = document.getElementById('resched-msg-' + id);
+      if (!date || !startTime || !endTime) { msg.textContent = 'Заполните все поля'; msg.className = 'msg err'; return; }
+      try {
+        await api(`/api/appointments/${id}/reschedule`, { method: 'POST', body: JSON.stringify({ date, startTime, endTime }) });
+        loadAppointments();
+      } catch (e) {
+        msg.textContent = e.error === 'slot_taken' ? 'Слот занят' : 'Ошибка';
+        msg.className = 'msg err';
+      }
+    });
+  });
+}
+
+function rowHtml(a) {
+  const date = String(a.appointment_date).slice(0, 10);
+  const start = String(a.start_time).slice(0, 5);
+  const end = String(a.end_time).slice(0, 5);
+  const canAct = a.status === 'confirmed';
+  return `
+    <tr>
+      <td>#${a.id}</td>
+      <td>${date}</td>
+      <td>${start}–${end}</td>
+      <td>${escapeHtml(a.user_name)}</td>
+      <td>${escapeHtml(a.service_name)}</td>
+      <td>${escapeHtml(a.master_name)}</td>
+      <td class="status-${a.status}">${STATUS_LABEL[a.status] || a.status}</td>
+      <td class="actions">
+        ${canAct ? `
+          <button data-reschedule-toggle="${a.id}">Перенести</button>
+          <button class="danger" data-cancel="${a.id}">Отменить</button>
+        ` : ''}
+      </td>
+    </tr>
+    ${canAct ? `
+    <tr id="resched-${a.id}" class="reschedule-row" style="display:none">
+      <td colspan="8">
+        <input type="date" id="resched-date-${a.id}" value="${date}">
+        <input type="time" id="resched-start-${a.id}" value="${start}">
+        <input type="time" id="resched-end-${a.id}" value="${end}">
+        <button data-reschedule-save="${a.id}">Сохранить</button>
+        <span class="msg" id="resched-msg-${a.id}"></span>
+      </td>
+    </tr>` : ''}
+  `;
+}
+
+document.getElementById('apptReload').addEventListener('click', loadAppointments);
+document.getElementById('apptMaster').addEventListener('change', loadAppointments);
+document.getElementById('apptStatus').addEventListener('change', loadAppointments);
+document.getElementById('apptDate').addEventListener('change', loadAppointments);
+document.getElementById('apptClearDate').addEventListener('click', () => {
+  document.getElementById('apptDate').value = '';
+  loadAppointments();
+});
+
+// ── Services ─────────────────────────────────────────────────────────────
+async function loadServices() {
+  const services = await api('/api/services');
+  const body = document.getElementById('servicesBody');
+  body.innerHTML = services.map(s => `
+    <tr data-id="${s.id}">
+      <td><input class="svc-name" value="${escapeHtml(s.name)}"></td>
+      <td><input class="svc-duration" type="number" style="width:60px" value="${s.duration_minutes}"></td>
+      <td><input class="svc-price" type="number" style="width:80px" value="${s.price}"></td>
+      <td><input class="svc-active" type="checkbox" ${s.is_active ? 'checked' : ''}></td>
+      <td><button data-save-svc="${s.id}">Сохранить</button> <span class="msg" id="svc-msg-${s.id}"></span></td>
+    </tr>
+  `).join('');
+
+  body.querySelectorAll('[data-save-svc]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.saveSvc;
+      const tr = body.querySelector(`tr[data-id="${id}"]`);
+      const msg = document.getElementById('svc-msg-' + id);
+      try {
+        await api(`/api/services/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: tr.querySelector('.svc-name').value,
+            duration_minutes: parseInt(tr.querySelector('.svc-duration').value, 10),
+            price: parseFloat(tr.querySelector('.svc-price').value),
+            is_active: tr.querySelector('.svc-active').checked,
+          }),
+        });
+        msg.textContent = 'Сохранено'; msg.className = 'msg ok';
+      } catch {
+        msg.textContent = 'Ошибка'; msg.className = 'msg err';
+      }
+    });
+  });
+}
+
+document.getElementById('newSvcAdd').addEventListener('click', async () => {
+  const name = document.getElementById('newSvcName').value.trim();
+  const duration_minutes = parseInt(document.getElementById('newSvcDuration').value, 10);
+  const price = parseFloat(document.getElementById('newSvcPrice').value);
+  if (!name || !duration_minutes || !price) return alert('Заполните все поля');
+  await api('/api/services', { method: 'POST', body: JSON.stringify({ name, duration_minutes, price }) });
+  document.getElementById('newSvcName').value = '';
+  document.getElementById('newSvcPrice').value = '';
+  loadServices();
+});
+
+// ── Working hours ────────────────────────────────────────────────────────
+async function loadHours() {
+  const masterId = document.getElementById('hoursMaster').value;
+  if (!masterId) return;
+  const hours = await api('/api/working-hours?masterId=' + masterId);
+  const byDay = Object.fromEntries(hours.map(h => [h.day_of_week, h]));
+  const wrap = document.getElementById('hoursWrap');
+
+  wrap.innerHTML = DAY_NAMES.map((name, i) => {
+    const h = byDay[i];
+    return `
+      <div class="hours-day">
+        <span>${name}</span>
+        <input type="time" id="hours-start-${i}" value="${h ? String(h.start_time).slice(0,5) : ''}">
+        <span>–</span>
+        <input type="time" id="hours-end-${i}" value="${h ? String(h.end_time).slice(0,5) : ''}">
+        <button data-save-hours="${i}">Сохранить</button>
+        <span class="msg" id="hours-msg-${i}"></span>
+      </div>
+    `;
+  }).join('');
+
+  wrap.querySelectorAll('[data-save-hours]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const day = btn.dataset.saveHours;
+      const startTime = document.getElementById('hours-start-' + day).value || null;
+      const endTime = document.getElementById('hours-end-' + day).value || null;
+      const msg = document.getElementById('hours-msg-' + day);
+      try {
+        await api('/api/working-hours', {
+          method: 'PUT',
+          body: JSON.stringify({ masterId: parseInt(masterId, 10), dayOfWeek: parseInt(day, 10), startTime, endTime }),
+        });
+        msg.textContent = startTime ? 'Сохранено' : 'Выходной'; msg.className = 'msg ok';
+      } catch {
+        msg.textContent = 'Ошибка'; msg.className = 'msg err';
+      }
+    });
+  });
+}
+
+document.getElementById('hoursMaster').addEventListener('change', loadHours);
+
+// ── Init ─────────────────────────────────────────────────────────────────
+(async function init() {
+  document.getElementById('apptDate').value = new Date().toISOString().slice(0, 10);
+  await loadMasters();
+  if (masters.length) document.getElementById('hoursMaster').value = masters[0].id;
+  await Promise.all([loadAppointments(), loadServices(), loadHours()]);
+})();
+</script>
+</body>
+</html>

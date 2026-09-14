@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Админка — вход</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, sans-serif;
+    background: #f5f2ef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+  }
+  form {
+    background: #fff;
+    padding: 32px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.08);
+    width: 280px;
+  }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+  button {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    background: #d6336c;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:hover { background: #b3265a; }
+  #error { color: #d6336c; font-size: 13px; margin: -4px 0 12px; display: none; }
+</style>
+</head>
+<body>
+<form id="loginForm">
+  <h1>💅 Админка салона</h1>
+  <input type="password" id="password" placeholder="Пароль" autofocus>
+  <div id="error">Неверный пароль</div>
+  <button type="submit">Войти</button>
+</form>
+<script>
+  document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const password = document.getElementById('password').value;
+    const errorEl = document.getElementById('error');
+    errorEl.style.display = 'none';
+    const res = await fetch('/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (res.ok) {
+      window.location.href = '/admin';
+    } else {
+      errorEl.style.display = 'block';
+    }
+  });
+</script>
+</body>
+</html>
