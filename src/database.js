@@ -451,9 +451,9 @@ export const db = {
 
   async waAuthSet(id, data) {
     await pool.query(
-      `INSERT INTO wa_auth (id, data, updated_at) VALUES ($1,$2,NOW())
-       ON CONFLICT (id) DO UPDATE SET data=$2, updated_at=NOW()`,
-      [id, data]
+      `INSERT INTO wa_auth (id, data, updated_at) VALUES ($1,$2::jsonb,NOW())
+       ON CONFLICT (id) DO UPDATE SET data=$2::jsonb, updated_at=NOW()`,
+      [id, JSON.stringify(data)]
     );
   },
 

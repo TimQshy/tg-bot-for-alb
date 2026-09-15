@@ -94,8 +94,15 @@ export async function connectWhatsApp(onIncoming) {
       const jid = m.key.remoteJid;
       if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') continue;
 
+      // Privacy-mode contacts address by LID (an opaque per-account id), not
+      // phone number — the real number.@s.whatsapp.net jid, when WhatsApp
+      // shares it, is on remoteJidAlt. Prefer whichever side is the actual
+      // phone-number jid so `phone` stays a real number everywhere else in
+      // the app (admin panel, ADMIN_PHONES matching, booking confirmations).
+      const pnJid = [jid, m.key.remoteJidAlt].find(j => j?.endsWith('@s.whatsapp.net'));
+      const phone = fromJid(pnJid || jid);
+
       const text = m.message?.conversation || m.message?.extendedTextMessage?.text || null;
-      const phone = fromJid(jid);
 
       try {
         await onIncoming(phone, { text, profileName: m.pushName || undefined });
