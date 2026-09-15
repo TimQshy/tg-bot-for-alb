@@ -1,83 +1,109 @@
-import crypto from 'crypto';
+// WhatsApp transport — connects as a linked device over the WhatsApp Web
+// protocol (Baileys), no Meta Business account/App Review needed. Session
+// lives in Postgres (see waAuth.js) so it survives redeploys; only needs a
+// fresh QR scan if the linked device is actually logged out.
+import { makeWASocket, fetchLatestBaileysVersion, DisconnectReason } from '@whiskeysockets/baileys';
+import P from 'pino';
+import QRCode from 'qrcode';
 import { db } from './database.js';
+import { useDbAuthState } from './waAuth.js';
 
-const API_VERSION = 'v21.0';
+const logger = P({ level: process.env.WHATSAPP_LOG_LEVEL || 'silent' });
 
-function apiUrl() {
-  return `https://graph.facebook.com/${API_VERSION}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+let sock = null;
+let latestQrDataUrl = null;
+let connectionStatus = 'connecting'; // 'connecting' | 'open' | 'closed'
+
+function toJid(phone) {
+  return phone.includes('@') ? phone : `${phone}@s.whatsapp.net`;
 }
 
-function trunc(str, n) {
-  if (!str) return str;
-  return str.length > n ? str.slice(0, n - 1) + '…' : str;
+function fromJid(jid) {
+  return jid.split('@')[0];
 }
 
-async function callApi(body) {
-  const res = await fetch(apiUrl(), {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ messaging_product: 'whatsapp', ...body }),
-  });
-  if (!res.ok) {
-    console.error('WhatsApp API error:', res.status, await res.text().catch(() => ''));
-  }
-  return res;
+export function getWaStatus() {
+  return { status: connectionStatus, qrDataUrl: connectionStatus === 'open' ? null : latestQrDataUrl };
 }
 
 export async function sendText(to, text) {
-  db.logMessage({ phone: to, direction: 'out', text }).catch(() => {});
-  return callApi({ to, type: 'text', text: { body: text, preview_url: false } });
+  db.logMessage({ phone: fromJid(toJid(to)), direction: 'out', text }).catch(() => {});
+  if (process.env.WA_LOG_OUTBOUND) console.log(`[OUT → ${to}]\n${text}\n---`);
+  if (!sock || connectionStatus !== 'open') {
+    console.error('WhatsApp not connected, dropping outbound message to', to);
+    return;
+  }
+  try {
+    await sock.sendMessage(toJid(to), { text });
+  } catch (err) {
+    console.error('WhatsApp send error:', err);
+  }
 }
 
-// buttons: [{id, title}], max 3
-export async function sendButtons(to, bodyText, buttons) {
-  return callApi({
-    to,
-    type: 'interactive',
-    interactive: {
-      type: 'button',
-      body: { text: bodyText },
-      action: {
-        buttons: buttons.map(b => ({
-          type: 'reply',
-          reply: { id: b.id, title: trunc(b.title, 20) },
-        })),
-      },
-    },
+// onIncoming(phone, { text, profileName })
+export async function connectWhatsApp(onIncoming) {
+  const { state, saveCreds } = await useDbAuthState();
+  const { version } = await fetchLatestBaileysVersion();
+
+  sock = makeWASocket({
+    version,
+    auth: state,
+    logger,
+    printQRInTerminal: false,
+    syncFullHistory: false,
+    markOnlineOnConnect: false,
   });
-}
 
-// sections: [{ title, rows: [{id, title, description}] }], max 10 rows total across all sections
-export async function sendList(to, { bodyText, buttonText, sections, footerText }) {
-  const cleanSections = sections.map(s => ({
-    title: trunc(s.title, 24),
-    rows: s.rows.map(r => ({
-      id: r.id,
-      title: trunc(r.title, 24),
-      ...(r.description ? { description: trunc(r.description, 72) } : {}),
-    })),
-  }));
+  sock.ev.on('creds.update', saveCreds);
 
-  return callApi({
-    to,
-    type: 'interactive',
-    interactive: {
-      type: 'list',
-      body: { text: bodyText },
-      ...(footerText ? { footer: { text: footerText } } : {}),
-      action: { button: trunc(buttonText, 20), sections: cleanSections },
-    },
+  sock.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect, qr } = update;
+
+    if (qr) {
+      latestQrDataUrl = await QRCode.toDataURL(qr);
+      connectionStatus = 'closed';
+      console.log('WhatsApp: scan QR at /admin/wa-qr to link the device');
+    }
+
+    if (connection === 'open') {
+      connectionStatus = 'open';
+      latestQrDataUrl = null;
+      console.log('WhatsApp: connected');
+    }
+
+    if (connection === 'close') {
+      connectionStatus = 'closed';
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+
+      if (statusCode === DisconnectReason.loggedOut) {
+        console.error('WhatsApp: device logged out, clearing session — rescan QR at /admin/wa-qr');
+        await db.waAuthDelete('creds').catch(() => {});
+        latestQrDataUrl = null;
+      }
+
+      console.log('WhatsApp: connection closed, reconnecting…', statusCode || '');
+      connectWhatsApp(onIncoming).catch(err => console.error('WhatsApp reconnect failed:', err));
+    }
   });
-}
 
-export function verifySignature(rawBody, signatureHeader) {
-  const secret = process.env.WHATSAPP_APP_SECRET; // required — checked in bot.js REQUIRED_ENV
-  if (!signatureHeader) return false;
-  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signatureHeader);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+
+    for (const m of messages) {
+      if (m.key.fromMe) continue;
+      const jid = m.key.remoteJid;
+      if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') continue;
+
+      const text = m.message?.conversation || m.message?.extendedTextMessage?.text || null;
+      const phone = fromJid(jid);
+
+      try {
+        await onIncoming(phone, { text, profileName: m.pushName || undefined });
+      } catch (err) {
+        console.error('Incoming message handling error:', err);
+      }
+    }
+  });
+
+  return sock;
 }

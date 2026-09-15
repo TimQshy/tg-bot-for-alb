@@ -2,7 +2,8 @@
 // waiting entry for that master/date gets offered the freed-up slot and has
 // a timeout to accept before we move to the next person in line.
 import { db } from './database.js';
-import { sendText, sendButtons } from './whatsapp.js';
+import { sendText } from './whatsapp.js';
+import { sendMenu } from './menu.js';
 import { getSession, clearSession } from './session.js';
 import { formatDateFull, getTimeSlotsForMaster } from './utils.js';
 import { sendMainMenu } from './booking.js';
@@ -42,15 +43,15 @@ export async function notifyNext(masterId, date) {
   await db.markWaitlistOffered(entry.id, { startTime: slot.start, endTime: slot.end });
 
   const full = await db.getWaitlistEntry(entry.id);
-  await sendButtons(
+  await sendMenu(
     entry.user_id,
     `🎉 Освободилось место!\n\n` +
       `💅 ${full.service_name}\n👩 ${full.master_name}\n` +
       `📅 ${formatDateFull(date)}\n🕐 ${slot.start} – ${slot.end}\n\n` +
       `Записать вас?`,
     [
-      { id: `waitlist:confirm:${entry.id}`, title: '✅ Да, записать' },
-      { id: `waitlist:decline:${entry.id}`, title: '❌ Нет, спасибо' },
+      { id: `waitlist:confirm:${entry.id}`, label: '✅ Да, записать' },
+      { id: `waitlist:decline:${entry.id}`, label: '❌ Нет, спасибо' },
     ]
   );
 }

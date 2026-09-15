@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { db } from './database.js';
-import { sendText } from './whatsapp.js';
+import { sendText, getWaStatus } from './whatsapp.js';
 import { formatDateFull, getTimeSlotsForMaster } from './utils.js';
 import * as waitlist from './waitlist.js';
 import { COOKIE_NAME, createSessionCookieValue, verifySessionCookieValue, parseCookies } from './adminAuth.js';
@@ -46,6 +46,28 @@ adminRouter.use(requireAuth);
 
 adminRouter.get('/', (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'admin-dashboard.html'));
+});
+
+// ── WhatsApp linked-device pairing (Baileys) ────────────────────────────
+adminRouter.get('/wa-status', (_req, res) => {
+  res.json({ status: getWaStatus().status });
+});
+
+adminRouter.get('/wa-qr', (_req, res) => {
+  const { status, qrDataUrl } = getWaStatus();
+  res.type('html');
+  if (status === 'open') {
+    return res.send('<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;text-align:center;margin-top:80px"><h1>✅ WhatsApp подключён</h1></body>');
+  }
+  if (!qrDataUrl) {
+    return res.send('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="5"><body style="font-family:sans-serif;text-align:center;margin-top:80px"><h1>⏳ Генерируем QR…</h1></body>');
+  }
+  res.send(`<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="20">
+<body style="font-family:sans-serif;text-align:center;margin-top:40px">
+<h1>Отсканируйте в WhatsApp</h1>
+<p>Настройки → Связанные устройства → Привязать устройство</p>
+<img src="${qrDataUrl}" style="width:300px;height:300px">
+</body>`);
 });
 
 // ── Appointments ─────────────────────────────────────────────────────────

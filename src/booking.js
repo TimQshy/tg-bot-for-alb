@@ -1,18 +1,19 @@
 import { db } from './database.js';
-import { sendText, sendButtons, sendList } from './whatsapp.js';
+import { sendText } from './whatsapp.js';
+import { sendMenu } from './menu.js';
 import { getSession, setSession, clearSession } from './session.js';
 import { formatDateShort, formatDateFull, getAvailableDates, getTimeSlotsForMaster } from './utils.js';
 import * as waitlist from './waitlist.js';
 
-const SLOTS_PAGE_SIZE = 9; // leaves 1 row for "more" when needed
-const MAX_LIST_ROWS = 10;
+const SLOTS_PAGE_SIZE = 9;
+const MENU_PAGE_SIZE = 9; // + 1 row for "ещё", matches old MAX_LIST_ROWS-1 budget
 
 const ADMIN_PHONES = () => (process.env.ADMIN_PHONES || '').split(',').map(s => s.trim()).filter(Boolean);
 
 export function sendMainMenu(phone, greeting = 'Здравствуйте! Чем можем помочь?') {
-  return sendButtons(phone, greeting, [
-    { id: 'book', title: '✂️ Записаться' },
-    { id: 'my_bookings', title: '📋 Мои записи' },
+  return sendMenu(phone, greeting, [
+    { id: 'book', label: '✂️ Записаться' },
+    { id: 'my_bookings', label: '📋 Мои записи' },
   ]);
 }
 
@@ -27,17 +28,12 @@ export async function start(phone) {
   clearSession(phone);
   setSession(phone, { step: 'choose_service' });
 
-  const rows = services.slice(0, MAX_LIST_ROWS).map(s => ({
+  const items = services.slice(0, MENU_PAGE_SIZE).map(s => ({
     id: `svc:${s.id}`,
-    title: s.name,
-    description: `${s.price}₽ · ${s.duration_minutes} мин`,
+    label: `${s.name} — ${s.price}₽ · ${s.duration_minutes} мин`,
   }));
 
-  return sendList(phone, {
-    bodyText: '💅 Запись в салон\n\nВыберите услугу:',
-    buttonText: 'Выбрать услугу',
-    sections: [{ title: 'Услуги', rows }],
-  });
+  return sendMenu(phone, '💅 Запись в салон\n\nВыберите услугу (ответьте цифрой):', items);
 }
 
 // ── Step 1: service chosen → show masters ───────────────────────────────
@@ -63,17 +59,16 @@ export async function chooseService(phone, serviceIdStr) {
     servicePrice: service.price,
   });
 
-  const rows = masters.slice(0, MAX_LIST_ROWS).map(m => ({
+  const items = masters.slice(0, MENU_PAGE_SIZE).map(m => ({
     id: `mst:${m.id}`,
-    title: m.name,
-    description: m.description || undefined,
+    label: m.description ? `${m.name} — ${m.description}` : m.name,
   }));
 
-  return sendList(phone, {
-    bodyText: `💅 ${service.name}\n💰 ${service.price}₽ · ⏱ ${service.duration_minutes} мин\n\nВыберите мастера:`,
-    buttonText: 'Выбрать мастера',
-    sections: [{ title: 'Мастера', rows }],
-  });
+  return sendMenu(
+    phone,
+    `💅 ${service.name}\n💰 ${service.price}₽ · ⏱ ${service.duration_minutes} мин\n\nВыберите мастера (ответьте цифрой):`,
+    items
+  );
 }
 
 // ── Step 2: master chosen → show dates ───────────────────────────────────
@@ -85,7 +80,7 @@ export async function chooseMaster(phone, masterIdStr) {
   const master = await db.getMaster(masterId);
   if (!master) return start(phone);
 
-  const dates = (await getAvailableDates(masterId, 30)).slice(0, MAX_LIST_ROWS);
+  const dates = (await getAvailableDates(masterId, 30)).slice(0, MENU_PAGE_SIZE);
   if (!dates.length) {
     clearSession(phone);
     return sendText(phone, `😔 У мастера «${master.name}» нет свободных дат в ближайшее время.`);
@@ -93,13 +88,9 @@ export async function chooseMaster(phone, masterIdStr) {
 
   setSession(phone, { ...session, step: 'choose_date', masterId, masterName: master.name });
 
-  const rows = dates.map(d => ({ id: `dt:${d}`, title: formatDateShort(d) }));
+  const items = dates.map(d => ({ id: `dt:${d}`, label: formatDateShort(d) }));
 
-  return sendList(phone, {
-    bodyText: `💅 ${session.serviceName}\n👩 ${master.name}\n\nВыберите дату:`,
-    buttonText: 'Выбрать дату',
-    sections: [{ title: 'Даты', rows }],
-  });
+  return sendMenu(phone, `💅 ${session.serviceName}\n👩 ${master.name}\n\nВыберите дату (ответьте цифрой):`, items);
 }
 
 // ── Step 3: date chosen → show time slots ────────────────────────────────
@@ -110,13 +101,13 @@ export async function chooseDate(phone, dateStr) {
   const slots = await getTimeSlotsForMaster(session.masterId, dateStr, session.serviceDuration);
   if (!slots.length) {
     setSession(phone, { ...session, step: 'waitlist_offer', date: dateStr });
-    return sendButtons(
+    return sendMenu(
       phone,
       `😔 На эту дату нет свободных слотов у ${session.masterName}.\n\n` +
         `Встать в лист ожидания? Если кто-то отменит запись — напишем вам первому.`,
       [
-        { id: 'waitlist_join', title: '⏳ Встать в очередь' },
-        { id: 'main_menu', title: '⬅️ В меню' },
+        { id: 'waitlist_join', label: '⏳ Встать в очередь' },
+        { id: 'main_menu', label: '⬅️ В меню' },
       ]
     );
   }
@@ -133,15 +124,14 @@ async function sendSlotsPage(phone) {
   const pageSlots = session.slots.slice(page * SLOTS_PAGE_SIZE, (page + 1) * SLOTS_PAGE_SIZE);
   const hasMore = session.slots.length > (page + 1) * SLOTS_PAGE_SIZE;
 
-  const rows = pageSlots.map(s => ({ id: `slot:${s.start}|${s.end}`, title: `${s.start}–${s.end}` }));
-  if (hasMore) rows.push({ id: 'more_slots', title: '▶️ Ещё время' });
+  const items = pageSlots.map(s => ({ id: `slot:${s.start}|${s.end}`, label: `${s.start}–${s.end}` }));
+  if (hasMore) items.push({ id: 'more_slots', label: '▶️ Ещё время' });
 
-  return sendList(phone, {
-    bodyText:
-      `💅 ${session.serviceName}\n👩 ${session.masterName}\n📅 ${formatDateFull(session.date)}\n\nВыберите время:`,
-    buttonText: 'Выбрать время',
-    sections: [{ title: 'Время', rows }],
-  });
+  return sendMenu(
+    phone,
+    `💅 ${session.serviceName}\n👩 ${session.masterName}\n📅 ${formatDateFull(session.date)}\n\nВыберите время (ответьте цифрой):`,
+    items
+  );
 }
 
 export async function nextSlotsPage(phone) {
@@ -160,7 +150,7 @@ export async function chooseSlot(phone, encoded) {
   setSession(phone, { ...session, step: 'confirm', startTime, endTime });
 
   const s = getSession(phone);
-  return sendButtons(
+  return sendMenu(
     phone,
     `✅ Подтвердите запись:\n\n` +
       `💅 Услуга: ${s.serviceName}\n` +
@@ -169,8 +159,8 @@ export async function chooseSlot(phone, encoded) {
       `🕐 Время: ${s.startTime} – ${s.endTime}\n` +
       `💰 Стоимость: ${s.servicePrice}₽`,
     [
-      { id: 'confirm', title: '✅ Подтвердить' },
-      { id: 'cancel', title: '❌ Отмена' },
+      { id: 'confirm', label: '✅ Подтвердить' },
+      { id: 'cancel', label: '❌ Отмена' },
     ]
   );
 }
@@ -218,10 +208,11 @@ export async function confirm(phone) {
     `💅 ${s.serviceName}\n` +
     `👩 ${s.masterName}\n` +
     `📅 ${formatDateFull(s.date)}\n` +
-    `🕐 ${s.startTime} – ${s.endTime}`;
+    `🕐 ${s.startTime} – ${s.endTime}\n\n` +
+    `Чтобы отменить, напишите: cancel ${appt.id}`;
 
   for (const adminPhone of ADMIN_PHONES()) {
-    sendButtons(adminPhone, adminText, [{ id: `admin:cancel:${appt.id}`, title: '❌ Отменить' }]).catch(() => {});
+    sendText(adminPhone, adminText).catch(() => {});
   }
 }
 
@@ -238,9 +229,7 @@ export async function showMyBookings(phone) {
   const appts = await db.getUserAppointments(phone);
 
   if (!appts.length) {
-    return sendButtons(phone, '📋 У вас нет активных записей.', [
-      { id: 'book', title: '✂️ Записаться' },
-    ]);
+    return sendMenu(phone, '📋 У вас нет активных записей.', [{ id: 'book', label: '✂️ Записаться' }]);
   }
 
   let text = '📋 Ваши записи:\n\n';
@@ -254,18 +243,13 @@ export async function showMyBookings(phone) {
   }
   await sendText(phone, text.trim());
 
-  const rows = appts.slice(0, MAX_LIST_ROWS - 1).map(a => ({
+  const items = appts.slice(0, MENU_PAGE_SIZE).map(a => ({
     id: `cancel_appt:${a.id}`,
-    title: `Отменить #${a.id}`,
-    description: `${a.service_name} · ${String(a.start_time).slice(0, 5)}`,
+    label: `Отменить #${a.id} (${a.service_name} · ${String(a.start_time).slice(0, 5)})`,
   }));
-  rows.push({ id: 'book', title: '✂️ Новая запись' });
+  items.push({ id: 'book', label: '✂️ Новая запись' });
 
-  return sendList(phone, {
-    bodyText: 'Действия:',
-    buttonText: 'Выбрать',
-    sections: [{ title: 'Записи', rows }],
-  });
+  return sendMenu(phone, 'Действия (ответьте цифрой):', items);
 }
 
 export async function startCancelAppt(phone, apptIdStr) {
@@ -276,7 +260,7 @@ export async function startCancelAppt(phone, apptIdStr) {
     return sendText(phone, 'Запись не найдена или уже отменена.');
   }
 
-  return sendButtons(
+  return sendMenu(
     phone,
     `❓ Отменить запись?\n\n` +
       `💅 ${appt.service_name}\n` +
@@ -284,8 +268,8 @@ export async function startCancelAppt(phone, apptIdStr) {
       `📅 ${formatDateFull(String(appt.appointment_date).slice(0, 10))}\n` +
       `🕐 ${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}`,
     [
-      { id: `confirm_cancel:${apptId}`, title: '✅ Да, отменить' },
-      { id: 'my_bookings', title: '⬅️ Назад' },
+      { id: `confirm_cancel:${apptId}`, label: '✅ Да, отменить' },
+      { id: 'my_bookings', label: '⬅️ Назад' },
     ]
   );
 }
@@ -304,7 +288,7 @@ export async function confirmCancelAppt(phone, apptIdStr) {
   return sendMainMenu(phone);
 }
 
-// ── Admin cancel (via button on new-booking notification) ────────────────
+// ── Admin cancel (admin replies "cancel <id>" to a new-booking notification) ─
 export async function handleAdminCancel(phone, apptIdStr) {
   if (!ADMIN_PHONES().includes(phone)) return; // silently ignore non-admins
 

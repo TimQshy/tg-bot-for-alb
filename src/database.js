@@ -106,6 +106,16 @@ CREATE TABLE IF NOT EXISTS waitlist (
 );
 
 CREATE INDEX IF NOT EXISTS idx_waitlist_lookup ON waitlist(master_id, desired_date, status);
+
+-- Baileys (WhatsApp Web protocol) session: creds + signal key store, keyed
+-- by a composite id like "creds" or "app-state-sync-key-<id>". DB-backed
+-- instead of local files so the linked-device session survives redeploys
+-- (Railway containers are ephemeral — see IMPLEMENTATION_PLAN.md).
+CREATE TABLE IF NOT EXISTS wa_auth (
+  id TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 `;
 
 export const db = {
@@ -430,5 +440,24 @@ export const db = {
 
   async markReminderSent(apptId, column) {
     await pool.query(`UPDATE appointments SET ${column}=true WHERE id=$1`, [apptId]);
+  },
+
+  // ── Baileys auth state (see src/waAuth.js) ──────────────────────────────
+  async waAuthGetMany(ids) {
+    if (!ids.length) return {};
+    const { rows } = await pool.query('SELECT id, data FROM wa_auth WHERE id = ANY($1)', [ids]);
+    return Object.fromEntries(rows.map(r => [r.id, r.data]));
+  },
+
+  async waAuthSet(id, data) {
+    await pool.query(
+      `INSERT INTO wa_auth (id, data, updated_at) VALUES ($1,$2,NOW())
+       ON CONFLICT (id) DO UPDATE SET data=$2, updated_at=NOW()`,
+      [id, data]
+    );
+  },
+
+  async waAuthDelete(id) {
+    await pool.query('DELETE FROM wa_auth WHERE id=$1', [id]);
   },
 };

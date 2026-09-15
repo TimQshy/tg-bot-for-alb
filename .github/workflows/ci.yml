@@ -29,6 +29,6 @@ jobs:
             node --input-type=module --check < "$f" && echo "OK: $f"
           done
 
-  # ── 2. Deploy — handled automatically by Koyeb via GitHub integration ──
-  # Koyeb watches the main branch and redeploys on every push.
-  # No extra CI step needed.
+  # ── 2. Deploy — manual, not triggered by this workflow ──────────────────
+  # Hosted on Railway, deployed via `railway up` (not git-push autodeploy).
+  # See IMPLEMENTATION_PLAN.md, "Деплой" section.

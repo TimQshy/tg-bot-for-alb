@@ -10,11 +10,6 @@ import { expireStaleOffers } from './waitlist.js';
 
 const WAITLIST_OFFER_TIMEOUT_MIN = parseInt(process.env.WAITLIST_OFFER_TIMEOUT_MIN || '30', 10);
 
-// NOTE: WhatsApp Cloud API requires an approved message template to text a
-// client outside the 24h customer-service window. Appointments booked days
-// ahead mean these reminders will almost always be outside that window —
-// swap the sendText call below for a template send once approved in Meta
-// Business Manager. See IMPLEMENTATION_PLAN.md, эпик D.
 async function sendReminder(appt, label) {
   await sendText(
     appt.user_id,

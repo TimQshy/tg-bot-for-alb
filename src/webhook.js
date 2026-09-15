@@ -1,6 +1,10 @@
+// Express app: health check, privacy page, and the /admin panel. WhatsApp
+// messages no longer arrive here — Baileys delivers them in-process (see
+// whatsapp.js connectWhatsApp), which calls handleIncoming() directly.
 import express from 'express';
 import { db } from './database.js';
-import { verifySignature, sendText } from './whatsapp.js';
+import { sendText } from './whatsapp.js';
+import { getLastMenu, resolveMenuReply, clearLastMenu } from './menu.js';
 import { getSession, clearSession } from './session.js';
 import * as booking from './booking.js';
 import * as waitlist from './waitlist.js';
@@ -8,16 +12,11 @@ import { adminRouter } from './admin.js';
 import { askAI } from './ai.js';
 
 const GREETING_WORDS = ['старт', 'start', 'меню', 'menu', 'привет', 'hi', 'hello'];
+const ADMIN_PHONES = () => (process.env.ADMIN_PHONES || '').split(',').map(s => s.trim()).filter(Boolean);
 
 export const app = express();
 
-app.use(
-  express.json({
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    },
-  })
-);
+app.use(express.json());
 
 app.get('/', (_req, res) => res.send('OK'));
 
@@ -36,59 +35,22 @@ app.get('/privacy', (_req, res) => {
 
 app.use('/admin', adminRouter);
 
-// ── Webhook verification (Meta calls this once when you save the webhook URL) ─
-app.get('/webhook', (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
-
-  if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    return res.status(200).send(challenge);
-  }
-  return res.sendStatus(403);
-});
-
-// ── Inbound messages ─────────────────────────────────────────────────────
-app.post('/webhook', async (req, res) => {
-  const signature = req.get('x-hub-signature-256');
-  if (!verifySignature(req.rawBody, signature)) {
-    return res.sendStatus(401);
-  }
-
-  res.sendStatus(200); // ack immediately, WhatsApp retries on timeout/non-2xx
-
-  try {
-    const value = req.body?.entry?.[0]?.changes?.[0]?.value;
-    const message = value?.messages?.[0];
-    if (!message) return; // status update or other event, nothing to do
-
-    const phone = message.from;
-    const profileName = value?.contacts?.[0]?.profile?.name;
-
-    let text = null;
-    let replyId = null;
-
-    if (message.type === 'text') {
-      text = message.text?.body || '';
-    } else if (message.type === 'interactive') {
-      const interactive = message.interactive;
-      if (interactive.type === 'button_reply') replyId = interactive.button_reply.id;
-      else if (interactive.type === 'list_reply') replyId = interactive.list_reply.id;
-    }
-
-    await handleIncoming(phone, { text, replyId, profileName });
-  } catch (err) {
-    console.error('Webhook handling error:', err);
-  }
-});
-
-async function handleIncoming(phone, { text, replyId, profileName }) {
+// ── Inbound messages — called by whatsapp.js for every incoming chat message ─
+export async function handleIncoming(phone, { text, profileName }) {
   await db.upsertUser({ id: phone, name: profileName || phone });
-  db.logMessage({ phone, direction: 'in', text: text || replyId }).catch(() => {});
+  db.logMessage({ phone, direction: 'in', text }).catch(() => {});
 
-  if (replyId?.startsWith('admin:cancel:')) {
-    return booking.handleAdminCancel(phone, replyId.split(':')[2]);
+  const trimmed = (text || '').trim();
+
+  // Admin action that doesn't depend on a numbered menu still being valid
+  // (a new-booking notification can arrive while the admin is mid-menu
+  // elsewhere) — see booking.js confirm().
+  const cancelMatch = ADMIN_PHONES().includes(phone) && /^cancel\s+(\d+)$/i.exec(trimmed);
+  if (cancelMatch) {
+    return booking.handleAdminCancel(phone, cancelMatch[1]);
   }
+
+  const replyId = resolveMenuReply(phone, text);
 
   if (replyId === 'book') return booking.start(phone);
   if (replyId === 'my_bookings') return booking.showMyBookings(phone);
@@ -109,20 +71,32 @@ async function handleIncoming(phone, { text, replyId, profileName }) {
   if (replyId?.startsWith('waitlist:confirm:')) return waitlist.handleOfferConfirm(phone, replyId.split(':')[2]);
   if (replyId?.startsWith('waitlist:decline:')) return waitlist.handleOfferDecline(phone, replyId.split(':')[2]);
 
-  const lower = (text || '').trim().toLowerCase();
+  const lower = trimmed.toLowerCase();
   if (GREETING_WORDS.includes(lower)) {
     clearSession(phone);
     return booking.sendMainMenu(phone);
   }
 
-  // Free text while mid-flow: nudge back to buttons, don't hand it to the AI
-  // (would conflict with the booking FSM reading session state).
+  const pendingMenu = getLastMenu(phone);
   const session = getSession(phone);
-  if (session) {
-    return booking.sendMainMenu(phone, 'Пожалуйста, используйте кнопки выше 👆 Или напишите "меню".');
+
+  // A menu is showing but the reply didn't resolve to one of its numbers —
+  // nudge back rather than silently falling through to the FSM/AI below.
+  if (pendingMenu && trimmed) {
+    return sendText(phone, `Ответьте цифрой из списка выше (1–${pendingMenu.length}). Или напишите "меню".`);
   }
 
-  // Free text, no active session: try the FAQ AI consultant before giving up.
+  // Free text mid-FSM-step with no menu recorded (shouldn't normally happen
+  // since every FSM step shows a menu, but session TTL/restart edge cases
+  // can leave this stale) — nudge back to the menu instead of the FSM
+  // silently misreading the text as something else.
+  if (session) {
+    clearLastMenu(phone);
+    return booking.sendMainMenu(phone, 'Начнём заново. Чем можем помочь?');
+  }
+
+  // Free text, no active session/menu: try the FAQ AI consultant before
+  // giving up.
   if (text) {
     const result = await askAI(text);
     if (result) {
