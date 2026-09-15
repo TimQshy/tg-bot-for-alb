@@ -191,3 +191,31 @@ Cloud API не даёт слать произвольный текст, если
 3. **Подать message template'ы в Meta Business Manager** на напоминания за 24ч/2ч — без этого `scheduler.js` будет пытаться слать обычным текстом и падать вне 24-часового окна переписки
 4. **Встреча с клиентом 2026-09-14** — зафиксировать реальное число `WAITLIST_OFFER_TIMEOUT_MIN`
 5. Через несколько недель работы бота — `npm run analyze-chats`, разобрать черновой FAQ руками, оформить в `src/faq.js`, подключить как приоритет перед LLM в `src/ai.js`
+
+---
+
+## Деплой — 2026-09-14
+
+Задача дня: поднять webhook+админку так, чтобы можно было протестировать до вечера.
+
+### Решения
+1. **Хостинг: Railway (план Hobby, $5/мес)**, не Vercel. Vercel — serverless, а у нас in-memory сессии букинг-флоу (`session.js`) и `node-cron` (`scheduler.js`) требуют долгоживущего процесса — на Vercel оба тихо сломались бы без переделки (сессии — на БД-хранилище, cron — на Vercel Cron Jobs + API-роут). Railway — обычный процесс, ничего переделывать не пришлось.
+2. **БД: Railway Postgres-плагин**, не Supabase. Изначально хотели Supabase (для БД и auth), но: (а) начатый Supabase-логин уводил в чужую/старую организацию с paused-проектом (случайно нажал "восстановить" не тот проект — не связано с этим ботом, отменить нельзя, просто оставили как есть, к текущей задаче отношения не имеет), (б) с дедлайном "до вечера" проще было добавить Postgres прямо в Railway одной командой, без нового аккаунта/OAuth-цепочки. Supabase Auth для админки (это тоже хотели сегодня) — **отложено**, админка пока на старом `adminAuth.js` (пароль + cookie).
+3. **БД в Google Sheets — рассмотрели и отклонили.** Причина: `database.js` весь на SQL (JOIN, CHECK, индексы), под Sheets пришлось бы переписывать все ~30 функций; главное — в бронировании нужна атомарность (`isSlotAvailable` + `createAppointment`), у Sheets нет транзакций → гонки при одновременной записи двух клиентов на один слот. Google Sheets остаётся отдельным GAS-вариантом бота в `gas/` (см. `GAS_REVIEW.md`) — не эта кодовая база.
+4. **Репозиторий переехал** с `TimQshy/tg-bot-for-alb` на **`tima-kho/beauty-salon-bot` (private)** — Railway настраивали под аккаунт `tima-kho`. Оба remote в git есть (`origin` = старый, `tima-kho` = новый), деплоится с нового.
+5. **Деплой через `railway up`** (локальная загрузка + билд по `Dockerfile`), не через GitHub-автодеплой — чтобы не возиться с установкой Railway GitHub App на `tima-kho`. Можно переключить на автодеплой позже: `railway service source connect --repo tima-kho/beauty-salon-bot --branch main --service bot`.
+
+### Что сделано
+- Исправлен баг в `Dockerfile` — не копировал `public/` (админка отдавала бы 404 на статику в проде)
+- Закоммичено и запушено всё (WhatsApp-миграция + AI/waitlist/scheduler) в `tima-kho/beauty-salon-bot`
+- Railway-проект `beauty-salon-bot`: сервис `Postgres` (плагин) + сервис `bot` (наше приложение)
+- На `bot` прописаны env: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `ADMIN_PASSWORD`, `ADMIN_COOKIE_SECRET`, `TIMEZONE` (значения — из локального `.env.whatsapp-test`), `DATABASE_URL=${{Postgres.DATABASE_URL}}` (ссылкой на плагин)
+- Задеплоено, приложение стартовало чисто ("Database ready", слушает порт) — таблицы накатились сами через `db.init()`
+- Публичный домен: **`https://bot-production-0678.up.railway.app`**
+- Смок-тест: `/` → 200, `/admin/login` → 200, `/webhook` verify-хендшейк (`hub.mode=subscribe` + правильный `hub.verify_token`) → 200
+
+### Осталось (ручные действия)
+1. **Прописать webhook URL в Meta** (App Dashboard → WhatsApp → Configuration): Callback URL = `https://bot-production-0678.up.railway.app/webhook`, Verify token = значение `WHATSAPP_VERIFY_TOKEN`
+2. **Не заданы на Railway**: `ADMIN_PHONES`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY` — бот стартует и без них (не в `REQUIRED_ENV`), но админ-уведомления о новых записях и ИИ-консультант молча не сработают, пока их не добавить
+3. Supabase (auth для админки) — вернуться к этому отдельно, не сегодня
+4. Старый Supabase-проект `tima-kho/shveiwf` остался в процессе restore из-за случайного клика — не наша задача, но если это что-то важное клиента, стоит проверить вручную в дашборде Supabase
