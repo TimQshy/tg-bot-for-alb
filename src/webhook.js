@@ -21,6 +21,19 @@ app.use(
 
 app.get('/', (_req, res) => res.send('OK'));
 
+app.get('/privacy', (_req, res) => {
+  res.type('html').send(`<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Политика конфиденциальности</title></head>
+<body style="font-family: sans-serif; max-width: 640px; margin: 40px auto; line-height: 1.5;">
+<h1>Политика конфиденциальности</h1>
+<p>Этот WhatsApp-бот используется для записи клиентов салона красоты на услуги.</p>
+<p>Мы собираем только данные, необходимые для записи: имя, номер телефона, выбранные услуги и время визита. Эти данные используются исключительно для обработки записи и напоминаний и не передаются третьим лицам.</p>
+<p>По вопросам удаления своих данных — напишите боту в WhatsApp.</p>
+</body>
+</html>`);
+});
+
 app.use('/admin', adminRouter);
 
 // ── Webhook verification (Meta calls this once when you save the webhook URL) ─
