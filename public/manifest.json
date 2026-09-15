@@ -4,8 +4,8 @@
   "start_url": "/admin",
   "scope": "/admin",
   "display": "standalone",
-  "background_color": "#FBF7F8",
-  "theme_color": "#B23A63",
+  "background_color": "#F1F7F4",
+  "theme_color": "#1D6A4C",
   "icons": [
     { "src": "/admin/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
     { "src": "/admin/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
