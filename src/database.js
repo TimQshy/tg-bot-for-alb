@@ -153,6 +153,26 @@ export const db = {
     return rows;
   },
 
+  async setServiceMasters(serviceId, masterIds) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM master_services WHERE service_id=$1', [serviceId]);
+      for (const masterId of masterIds) {
+        await client.query(
+          'INSERT INTO master_services (master_id, service_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+          [masterId, serviceId]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
   // ── Working hours ─────────────────────────────────────────────────────────
   async getWorkingHours(masterId, dayOfWeek) {
     const { rows } = await pool.query(
@@ -163,11 +183,12 @@ export const db = {
   },
 
   // ── Appointments ──────────────────────────────────────────────────────────
-  async getBookedSlots(masterId, date) {
+  async getBookedSlots(masterId, date, excludeApptId = null) {
     const { rows } = await pool.query(
       `SELECT start_time, end_time FROM appointments
-       WHERE master_id=$1 AND appointment_date=$2 AND status='confirmed'`,
-      [masterId, date]
+       WHERE master_id=$1 AND appointment_date=$2 AND status='confirmed'
+         AND ($3::int IS NULL OR id<>$3)`,
+      [masterId, date, excludeApptId]
     );
     return rows;
   },

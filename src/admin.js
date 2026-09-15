@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { db } from './database.js';
 import { sendText } from './whatsapp.js';
-import { formatDateFull } from './utils.js';
+import { formatDateFull, getTimeSlotsForMaster } from './utils.js';
 import * as waitlist from './waitlist.js';
 import { COOKIE_NAME, createSessionCookieValue, verifySessionCookieValue, parseCookies } from './adminAuth.js';
 
@@ -50,10 +50,10 @@ adminRouter.get('/', (_req, res) => {
 
 // ── Appointments ─────────────────────────────────────────────────────────
 adminRouter.get('/api/appointments', async (req, res) => {
-  const { date, masterId, status } = req.query;
+  const { date, dateFrom, dateTo, masterId, status } = req.query;
   const rows = await db.listAppointments({
-    dateFrom: date || null,
-    dateTo: date || null,
+    dateFrom: dateFrom || date || null,
+    dateTo: dateTo || date || null,
     masterId: masterId ? parseInt(masterId, 10) : null,
     status: status || null,
   });
@@ -149,3 +149,59 @@ adminRouter.put('/api/working-hours', async (req, res) => {
   }
   res.json({ ok: true });
 });
+
+// ── Service ↔ master assignment ──────────────────────────────────────────
+adminRouter.get('/api/services/:id/masters', async (req, res) => {
+  res.json(await db.getMastersForService(req.params.id));
+});
+
+adminRouter.put('/api/services/:id/masters', async (req, res) => {
+  const { masterIds } = req.body || {};
+  if (!Array.isArray(masterIds)) return res.status(400).json({ error: 'missing_fields' });
+  await db.setServiceMasters(req.params.id, masterIds);
+  res.json({ ok: true });
+});
+
+// ── Available slots (reschedule sheet + new-appointment sheet) ───────────
+adminRouter.get('/api/available-slots', async (req, res) => {
+  const { masterId, date, durationMinutes, excludeApptId } = req.query;
+  if (!masterId || !date || !durationMinutes) return res.status(400).json({ error: 'missing_fields' });
+  const slots = await getTimeSlotsForMaster(
+    parseInt(masterId, 10),
+    date,
+    parseInt(durationMinutes, 10),
+    excludeApptId ? parseInt(excludeApptId, 10) : null
+  );
+  res.json(slots);
+});
+
+// ── Create appointment (admin-created, e.g. phone booking / walk-in) ────
+adminRouter.post('/api/appointments', async (req, res) => {
+  const { phone, name, serviceId, masterId, date, startTime, endTime } = req.body || {};
+  const cleanPhone = String(phone || '').replace(/\D/g, '');
+  if (!cleanPhone || !serviceId || !masterId || !date || !startTime || !endTime) {
+    return res.status(400).json({ error: 'missing_fields' });
+  }
+
+  const masters = await db.getMastersForService(serviceId);
+  if (!masters.some(m => m.id === Number(masterId))) {
+    return res.status(400).json({ error: 'master_not_assigned' });
+  }
+
+  const available = await db.isSlotAvailable(masterId, date, startTime, endTime);
+  if (!available) return res.status(409).json({ error: 'slot_taken' });
+
+  await db.upsertUser({ id: cleanPhone, name: name || cleanPhone });
+  const created = await db.createAppointment({ userId: cleanPhone, masterId, serviceId, date, startTime, endTime });
+  const appt = await db.getAppointmentById(created.id);
+
+  sendText(
+    cleanPhone,
+    `✅ Вас записали\n\n💅 ${appt.service_name}\n👩 ${appt.master_name}\n` +
+      `📅 ${formatDateFull(date)}\n🕐 ${startTime} – ${endTime}`
+  ).catch(() => {});
+
+  res.json(appt);
+});
+
+adminRouter.use(express.static(PUBLIC_DIR));

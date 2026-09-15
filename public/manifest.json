@@ -1,0 +1,12 @@
+{
+  "name": "Админка салона",
+  "short_name": "Салон",
+  "start_url": "/admin",
+  "scope": "/admin",
+  "display": "standalone",
+  "background_color": "#FBF7F8",
+  "theme_color": "#B23A63",
+  "icons": [
+    { "src": "/admin/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

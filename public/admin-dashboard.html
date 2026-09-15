@@ -3,348 +3,1020 @@
 <head>
 <meta charset="utf-8">
 <title>Админка салона</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="/admin/manifest.json">
+<meta name="theme-color" content="#B23A63">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: system-ui, sans-serif; background: #f5f2ef; margin: 0; color: #222; }
-  header {
-    background: #fff; padding: 14px 20px; display: flex; align-items: center;
-    justify-content: space-between; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+:root{
+  --ground:#FBF7F8; --surface:#FFFFFF; --surface-2:#F6EFF1;
+  --line:#EDE2E5; --line-strong:#DFD0D5;
+  --ink:#26191E; --ink-2:#6B5860; --ink-3:#9B8A91;
+  --accent:#B23A63; --accent-ink:#8E2C4D; --accent-soft:#FBEAF0;
+  --ok:#2E7A5B; --ok-soft:#E6F3ED;
+  --wait:#9A6414; --wait-soft:#FBF0DF;
+  --off:#8A7A80; --off-soft:#F0EAEC;
+  --r-card:16px; --r-sm:10px; --r-pill:999px;
+  --shadow-card:0 1px 2px rgba(38,25,30,.05), 0 1px 1px rgba(38,25,30,.04);
+  --shadow-sheet:0 -8px 40px rgba(38,25,30,.16);
+  --shadow-fab:0 6px 20px rgba(178,58,99,.32);
+  --tap:44px; --bar-h:60px; --safe-b:env(safe-area-inset-bottom, 0px);
+  --font-ui:'Onest', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-num:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#161114; --surface:#1E1719; --surface-2:#261D21;
+    --line:#312629; --line-strong:#3E3034;
+    --ink:#F3EBEE; --ink-2:#B9A7AE; --ink-3:#8A777E;
+    --accent:#E98BAC; --accent-ink:#F3B3C8; --accent-soft:#3A222C;
+    --ok:#67C79C; --ok-soft:#1C3830;
+    --wait:#D9A24E; --wait-soft:#3A2E1A;
+    --off:#9A888F; --off-soft:#2A2125;
+    --shadow-card:0 1px 2px rgba(0,0,0,.4);
+    --shadow-sheet:0 -8px 40px rgba(0,0,0,.55);
+    --shadow-fab:0 6px 20px rgba(0,0,0,.5);
   }
-  header h1 { font-size: 16px; margin: 0; }
-  header button { background: none; border: 1px solid #ddd; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
-  nav { display: flex; gap: 4px; padding: 12px 20px 0; }
-  nav button {
-    border: none; background: #eee; padding: 8px 16px; border-radius: 8px 8px 0 0;
-    cursor: pointer; font-size: 13px; color: #555;
-  }
-  nav button.active { background: #fff; color: #d6336c; font-weight: 600; }
-  main { padding: 16px 20px; max-width: 900px; margin: 0 auto; }
-  section { background: #fff; border-radius: 0 8px 8px 8px; padding: 16px; }
-  section[hidden] { display: none; }
-  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-  .toolbar input, .toolbar select { padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #eee; vertical-align: top; }
-  th { color: #888; font-weight: 500; font-size: 12px; }
-  .status-confirmed { color: #2b8a3e; }
-  .status-cancelled { color: #999; text-decoration: line-through; }
-  .status-completed { color: #495057; }
-  .actions button {
-    border: none; background: #f1f3f5; padding: 5px 10px; border-radius: 6px;
-    cursor: pointer; font-size: 12px; margin-right: 4px;
-  }
-  .actions button.danger { color: #d6336c; }
-  .reschedule-row input[type=date], .reschedule-row input[type=time] { width: 110px; }
-  .empty { color: #999; padding: 20px; text-align: center; }
-  .add-row input { width: 100%; padding: 5px 6px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
-  .add-row td { padding-top: 12px; }
-  .hours-day { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee; }
-  .hours-day span { width: 110px; font-size: 13px; }
-  .hours-day input[type=time] { padding: 5px; border: 1px solid #ddd; border-radius: 6px; }
-  .hours-day button { border: none; background: #f1f3f5; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
-  .msg { font-size: 12px; margin-left: 8px; }
-  .msg.ok { color: #2b8a3e; }
-  .msg.err { color: #d6336c; }
+}
+:root[data-theme="dark"]{
+  --ground:#161114; --surface:#1E1719; --surface-2:#261D21;
+  --line:#312629; --line-strong:#3E3034;
+  --ink:#F3EBEE; --ink-2:#B9A7AE; --ink-3:#8A777E;
+  --accent:#E98BAC; --accent-ink:#F3B3C8; --accent-soft:#3A222C;
+  --ok:#67C79C; --ok-soft:#1C3830;
+  --wait:#D9A24E; --wait-soft:#3A2E1A;
+  --off:#9A888F; --off-soft:#2A2125;
+  --shadow-card:0 1px 2px rgba(0,0,0,.4);
+  --shadow-sheet:0 -8px 40px rgba(0,0,0,.55);
+  --shadow-fab:0 6px 20px rgba(0,0,0,.5);
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none !important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font-ui);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0}
+ol,ul{list-style:none;margin:0;padding:0}
+h1,h2,h3{margin:0;font-weight:600}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.app{min-height:100dvh;display:grid;grid-template-columns:1fr}
+.col{width:100%;max-width:560px;margin:0 auto;padding:0 16px;padding-bottom:calc(var(--bar-h) + var(--safe-b) + 24px)}
+.appbar{position:sticky;top:0;z-index:30;background:color-mix(in srgb, var(--ground) 88%, transparent);backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--line)}
+.appbar__in{max-width:560px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px}
+.brand{display:flex;align-items:baseline;gap:8px;min-width:0}
+.brand__name{font-size:17px;font-weight:600;letter-spacing:-.015em}
+.brand__sub{font-size:12px;color:var(--ink-3);white-space:nowrap}
+.appbar__spacer{flex:1}
+.iconbtn{width:var(--tap);height:var(--tap);display:grid;place-items:center;border-radius:12px;color:var(--ink-2)}
+.iconbtn:active{background:var(--surface-2)}
+.iconbtn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.screen-head{padding:18px 0 6px}
+.screen-head h1{font-size:26px;letter-spacing:-.03em}
+.screen-head p{margin:4px 0 0;color:var(--ink-2);font-size:13.5px}
+.days{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;margin:0 -16px;scroll-snap-type:x proximity;scrollbar-width:none}
+.days::-webkit-scrollbar{display:none}
+.day{flex:0 0 auto;scroll-snap-align:center;width:52px;min-height:62px;padding:8px 0 9px;border-radius:14px;border:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;align-items:center;gap:2px}
+.day__dow{font-size:11px;color:var(--ink-3);text-transform:lowercase}
+.day__num{font-size:18px;font-weight:600;font-family:var(--font-num)}
+.day__dots{display:flex;gap:3px;height:4px;margin-top:2px}
+.day__dots i{width:4px;height:4px;border-radius:50%;background:var(--accent);opacity:.45}
+.day[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .day[aria-pressed="true"]{color:#241016}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .day[aria-pressed="true"]{color:#241016}}
+.day[aria-pressed="true"] .day__dow{color:inherit;opacity:.8}
+.day[aria-pressed="true"] .day__dots i{background:currentColor;opacity:.7}
+.filters{display:flex;gap:8px;overflow-x:auto;padding:4px 16px 12px;margin:0 -16px;scrollbar-width:none}
+.filters::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;height:36px;padding:0 14px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--surface);color:var(--ink-2);font-size:13.5px;font-weight:500;white-space:nowrap}
+.chip svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chip--on,.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:transparent;color:var(--accent-ink)}
+.chip--reset{color:var(--ink-3)}
+.daybar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;margin-bottom:14px;background:var(--surface-2);border-radius:var(--r-sm);font-size:13px;color:var(--ink-2)}
+.daybar b{color:var(--ink);font-weight:600}
+.daybar .dot{width:3px;height:3px;border-radius:50%;background:var(--ink-3)}
+.timeline{display:flex;flex-direction:column}
+.tl{display:grid;grid-template-columns:58px 1fr;column-gap:10px}
+.tl__rail{position:relative;display:flex;flex-direction:column;align-items:flex-end;padding-top:14px}
+.tl__rail::before{content:"";position:absolute;right:5px;top:0;bottom:-14px;width:1px;background:var(--line-strong)}
+.tl__time{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:13px;font-weight:500;color:var(--ink-2);background:var(--ground);padding:0 12px 0 0;position:relative;z-index:1}
+.tl__mark{position:absolute;right:1px;top:18px;width:9px;height:9px;border-radius:50%;background:var(--surface);border:2px solid var(--accent);z-index:2}
+.tl--off .tl__mark{border-color:var(--ink-3)}
+.appt{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--shadow-card);padding:14px;margin-bottom:10px}
+.appt__top{display:flex;align-items:flex-start;gap:10px}
+.appt__client{font-size:16.5px;font-weight:600;letter-spacing:-.01em;flex:1;min-width:0;word-break:break-word}
+.appt__id{font-family:var(--font-num);font-size:11.5px;color:var(--ink-3);padding-top:4px}
+.appt__svc{margin:3px 0 0;font-size:14px;color:var(--ink-2)}
+.appt__meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--ink-3)}
+.appt__dur{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.master{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.ava{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:600;background:var(--accent-soft);color:var(--accent-ink)}
+.status{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:var(--r-pill);font-size:12px;font-weight:500}
+.status i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.status--ok{background:var(--ok-soft);color:var(--ok)}
+.status--wait{background:var(--wait-soft);color:var(--wait)}
+.status--off{background:var(--off-soft);color:var(--off)}
+.appt--off{opacity:.62}
+.appt--off .appt__client{text-decoration:line-through;text-decoration-color:var(--ink-3)}
+.appt__actions{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.btn{min-height:var(--tap);padding:0 14px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:14px;font-weight:500;border:1px solid transparent}
+.btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.btn--ghost{border-color:var(--line);background:var(--surface);color:var(--ink)}
+.btn--ghost:active{background:var(--surface-2)}
+.btn--soft{background:var(--surface-2);color:var(--ink)}
+.btn--danger{border-color:var(--line);color:#C0392B;background:var(--surface)}
+:root[data-theme="dark"] .btn--danger{color:#F08A7E}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn--danger{color:#F08A7E}}
+.btn--primary{background:var(--accent);color:#fff;font-weight:600}
+:root[data-theme="dark"] .btn--primary{color:#241016}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn--primary{color:#241016}}
+.btn--primary:active{filter:brightness(.94)}
+.btn--primary:disabled{opacity:.5}
+.btn--block{width:100%}
+.btn--icon{width:var(--tap);padding:0;flex:0 0 auto}
+.tl-gap{display:grid;grid-template-columns:58px 1fr;column-gap:10px;margin:0 0 10px}
+.tl-gap__rail{position:relative}
+.tl-gap__rail::before{content:"";position:absolute;right:5px;top:-10px;bottom:0;width:1px;background:repeating-linear-gradient(var(--line-strong) 0 3px, transparent 3px 7px)}
+.tl-gap__body{display:flex;align-items:center;gap:8px;min-height:38px;padding:0 12px;border-radius:var(--r-sm);border:1px dashed var(--line-strong);font-size:12.5px;color:var(--ink-3)}
+.tl-gap__body b{color:var(--ink-2);font-weight:500;font-family:var(--font-num)}
+.tl-gap__add{margin-left:auto;color:var(--accent);font-size:12.5px;font-weight:600}
+.empty{text-align:center;padding:52px 24px;border:1px dashed var(--line-strong);border-radius:var(--r-card)}
+.empty h3{font-size:17px;margin-bottom:6px}
+.empty p{margin:0 auto 18px;max-width:34ch;color:var(--ink-2);font-size:13.5px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--shadow-card);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;min-height:64px;padding:12px 14px;width:100%;text-align:left;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row:active{background:var(--surface-2)}
+.row__main{flex:1;min-width:0}
+.row__title{font-size:15.5px;font-weight:500;letter-spacing:-.005em}
+.row__sub{font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.row__price{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:15px;font-weight:500;white-space:nowrap}
+.row__chev{width:18px;height:18px;color:var(--ink-3);fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+.section-label{font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin:22px 0 8px}
+.switch{--w:46px;--h:28px;flex:0 0 auto;width:var(--w);height:var(--h);border-radius:var(--r-pill);background:var(--line-strong);position:relative}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .18s}
+.switch[aria-checked="true"]{background:var(--accent)}
+.switch[aria-checked="true"]::after{transform:translateX(18px)}
+.timepair{display:flex;align-items:center;gap:6px}
+.timeinput{min-height:38px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface-2);font-family:var(--font-num);font-size:14px;font-variant-numeric:tabular-nums}
+.timepair span{color:var(--ink-3)}
+.hoursrow{display:flex;align-items:center;gap:12px;min-height:64px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.hoursrow:last-child{border-bottom:0}
+.hoursrow__day{width:36px;font-weight:500;font-size:14.5px}
+.hoursrow--off .timepair{opacity:.4;pointer-events:none}
+.hoursrow__off{font-size:13px;color:var(--ink-3)}
+.scrim{position:fixed;inset:0;z-index:40;background:rgba(30,18,23,.45);backdrop-filter:blur(2px)}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;max-height:88dvh;display:flex;flex-direction:column;background:var(--surface);border-radius:22px 22px 0 0;box-shadow:var(--shadow-sheet);padding-bottom:var(--safe-b)}
+.sheet__grab{width:36px;height:4px;border-radius:2px;background:var(--line-strong);margin:8px auto 0;flex:0 0 auto}
+.sheet__head{display:flex;align-items:center;gap:10px;padding:12px 16px 10px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.sheet__title{font-size:17px;font-weight:600;letter-spacing:-.015em;flex:1}
+.sheet__body{padding:14px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.sheet__foot{padding:12px 16px 16px;border-top:1px solid var(--line);flex:0 0 auto;display:grid;grid-template-columns:1fr 1.4fr;gap:10px}
+@media (min-width:900px){.sheet{left:50%;transform:translateX(-50%);width:460px;bottom:24px;border-radius:22px}}
+.sheet__ctx{display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--surface-2);border-radius:var(--r-sm);margin-bottom:16px}
+.sheet__ctx .old{font-family:var(--font-num);font-size:13px;color:var(--ink-3);text-decoration:line-through}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(82px,1fr));gap:8px}
+.slot{min-height:var(--tap);border-radius:12px;border:1px solid var(--line);background:var(--surface);font-family:var(--font-num);font-size:14px;font-weight:500;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+.slot[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .slot[aria-pressed="true"]{color:#241016}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .slot[aria-pressed="true"]{color:#241016}}
+.field{display:block;margin-bottom:14px}
+.field__label{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:6px}
+.input{width:100%;min-height:46px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);font-size:15px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hint{font-size:12.5px;color:var(--ink-3);margin:2px 0 0}
+.hint--err{color:#C0392B}
+:root[data-theme="dark"] .hint--err{color:#F08A7E}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .hint--err{color:#F08A7E}}
+.fab{position:fixed;right:16px;z-index:35;bottom:calc(var(--bar-h) + var(--safe-b) + 16px);width:54px;height:54px;border-radius:18px;background:var(--accent);color:#fff;display:grid;place-items:center;box-shadow:var(--shadow-fab)}
+:root[data-theme="dark"] .fab{color:#241016}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .fab{color:#241016}}
+.fab svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:36;height:calc(var(--bar-h) + var(--safe-b));padding-bottom:var(--safe-b);background:color-mix(in srgb, var(--surface) 94%, transparent);backdrop-filter:saturate(1.4) blur(12px);border-top:1px solid var(--line);display:flex}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--ink-3);font-size:11px;font-weight:500}
+.tab svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tab[aria-selected="true"]{color:var(--accent)}
+.sidenav{display:none}
+@media (min-width:900px){
+  .app{grid-template-columns:236px 1fr;max-width:1020px;margin:0 auto;gap:28px}
+  .sidenav{display:flex;flex-direction:column;gap:4px;position:sticky;top:0;align-self:start;height:100dvh;padding:20px 12px;border-right:1px solid var(--line)}
+  .sidenav .brand{padding:6px 10px 18px;flex-direction:column;gap:2px;align-items:flex-start}
+  .snav{display:flex;align-items:center;gap:10px;min-height:42px;padding:0 12px;border-radius:10px;color:var(--ink-2);font-size:14.5px;font-weight:500}
+  .snav svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .snav[aria-selected="true"]{background:var(--accent-soft);color:var(--accent-ink)}
+  .tabbar{display:none}
+  .appbar{position:static;background:none;backdrop-filter:none;border:0}
+  .appbar__in{max-width:none;padding:20px 0 0}
+  .appbar .brand{display:none}
+  .col{max-width:640px;margin:0;padding:0 24px 60px}
+  .days,.filters{margin:0;padding-left:0;padding-right:0}
+  .appt__actions{grid-template-columns:auto auto auto;justify-content:start}
+}
+.screen[hidden]{display:none}
+.toast{position:fixed;left:50%;bottom:calc(var(--bar-h) + var(--safe-b) + 16px);transform:translateX(-50%);background:var(--ink);color:var(--ground);padding:10px 16px;border-radius:var(--r-pill);font-size:13px;z-index:60;box-shadow:var(--shadow-card)}
 </style>
 </head>
 <body>
-<header>
-  <h1>💅 Админка салона</h1>
-  <button id="logoutBtn">Выйти</button>
-</header>
-<nav>
-  <button class="tab-btn active" data-tab="appointments">Записи</button>
-  <button class="tab-btn" data-tab="services">Услуги</button>
-  <button class="tab-btn" data-tab="hours">Часы работы</button>
+<div class="app">
+  <nav class="sidenav" aria-label="Разделы">
+    <div class="brand"><span class="brand__name">Админка салона</span></div>
+    <button class="snav" data-goto="zapisi" aria-selected="true">
+      <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Записи</button>
+    <button class="snav" data-goto="uslugi" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Услуги</button>
+    <button class="snav" data-goto="chasy" aria-selected="false">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Часы работы</button>
+  </nav>
+
+  <div>
+    <header class="appbar">
+      <div class="appbar__in">
+        <div class="brand"><span class="brand__name">Админка салона</span><span class="brand__sub" id="todayLabel"></span></div>
+        <span class="appbar__spacer"></span>
+        <button class="iconbtn" id="themeBtn" aria-label="Сменить тему">
+          <svg viewBox="0 0 24 24"><path d="M21 13a8.5 8.5 0 1 1-10-10 7 7 0 0 0 10 10z"/></svg>
+        </button>
+        <button class="iconbtn" id="refreshBtn" aria-label="Обновить">
+          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-.6 4"/><path d="M20 5v6h-6"/></svg>
+        </button>
+        <button class="iconbtn" id="logoutBtn" aria-label="Выйти">
+          <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ================= ЗАПИСИ ================= -->
+    <main class="col screen" id="screen-zapisi">
+      <div class="screen-head"><h1>Записи</h1><p>Проведите по датам, чтобы выбрать день</p></div>
+      <div class="days" id="dayStrip" role="group" aria-label="Выбор даты"></div>
+      <div class="filters" role="group" aria-label="Фильтры">
+        <button class="chip chip--on" id="chipMaster" data-sheet="sheet-master">Все мастера
+          <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+        <button class="chip chip--on" id="chipStatus" data-sheet="sheet-status">Подтверждённые
+          <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+        <button class="chip" id="chipDate" data-sheet="sheet-date">Другая дата
+          <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></button>
+        <button class="chip chip--reset" id="chipReset">Сбросить</button>
+      </div>
+      <div class="daybar" id="dayBar"></div>
+      <ol class="timeline" id="timeline"></ol>
+      <div class="empty" id="emptyState" hidden>
+        <h3>На этот день записей нет</h3>
+        <p>Можно добавить запись прямо сейчас.</p>
+        <button class="btn btn--primary" id="emptyAddBtn">Добавить запись</button>
+      </div>
+    </main>
+
+    <!-- ================= УСЛУГИ ================= -->
+    <main class="col screen" id="screen-uslugi" hidden>
+      <div class="screen-head"><h1>Услуги</h1><p id="uslugiSub"></p></div>
+      <div class="card" id="servicesCard"></div>
+      <button class="btn btn--primary btn--block" id="addServiceBtn" style="margin-top:14px">+ Добавить услугу</button>
+    </main>
+
+    <!-- ================= ЧАСЫ РАБОТЫ ================= -->
+    <main class="col screen" id="screen-chasy" hidden>
+      <div class="screen-head"><h1>Часы работы</h1><p>Слоты для онлайн-записи считаются из этого графика</p></div>
+      <div class="filters" id="hoursMasterChips" role="group" aria-label="Мастер"></div>
+      <div class="card" id="hoursCard"></div>
+    </main>
+  </div>
+</div>
+
+<button class="fab" id="fabAdd" aria-label="Новая запись">
+  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+
+<nav class="tabbar" role="tablist" aria-label="Разделы">
+  <button class="tab" role="tab" aria-selected="true" data-goto="zapisi">
+    <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Записи</button>
+  <button class="tab" role="tab" aria-selected="false" data-goto="uslugi">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Услуги</button>
+  <button class="tab" role="tab" aria-selected="false" data-goto="chasy">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Часы</button>
 </nav>
-<main>
 
-  <section id="tab-appointments">
-    <div class="toolbar">
-      <input type="date" id="apptDate">
-      <select id="apptMaster"><option value="">Все мастера</option></select>
-      <select id="apptStatus">
-        <option value="">Все статусы</option>
-        <option value="confirmed" selected>Подтверждённые</option>
-        <option value="cancelled">Отменённые</option>
-        <option value="completed">Завершённые</option>
-      </select>
-      <button id="apptReload">Обновить</button>
-      <button id="apptClearDate">Сбросить дату</button>
+<!-- ================= ШТОРКИ ================= -->
+
+<div class="sheet" id="sheet-new" hidden role="dialog" aria-modal="true" aria-labelledby="newTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="newTitle">Новая запись</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body">
+    <label class="field"><span class="field__label">Телефон клиента</span>
+      <input class="input" id="newPhone" placeholder="996700000000" inputmode="tel"></label>
+    <label class="field"><span class="field__label">Имя клиента</span>
+      <input class="input" id="newName" placeholder="Имя"></label>
+
+    <span class="field__label">Услуга</span>
+    <div class="filters" id="newServiceChips" style="padding:0;margin:0 0 6px"></div>
+
+    <span class="field__label">Мастер</span>
+    <div class="filters" id="newMasterChips" style="padding:0;margin:0 0 6px"></div>
+
+    <label class="field"><span class="field__label">Дата</span>
+      <input class="input" type="date" id="newDate"></label>
+
+    <span class="field__label">Свободные слоты</span>
+    <div class="slots" id="newSlots"></div>
+    <p class="hint" id="newHint"></p>
+  </div>
+  <div class="sheet__foot">
+    <button class="btn btn--ghost" data-close>Отмена</button>
+    <button class="btn btn--primary" id="newSubmitBtn" disabled>Записать</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-move" hidden role="dialog" aria-modal="true" aria-labelledby="moveTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="moveTitle">Перенести запись</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body">
+    <div class="sheet__ctx" id="moveCtx"></div>
+    <label class="field"><span class="field__label">Новая дата</span>
+      <input class="input" type="date" id="moveDate"></label>
+    <span class="field__label" id="moveSlotsLabel">Свободные слоты</span>
+    <div class="slots" id="moveSlots"></div>
+    <p class="hint" id="moveHint"></p>
+  </div>
+  <div class="sheet__foot">
+    <button class="btn btn--ghost" data-close>Отмена</button>
+    <button class="btn btn--primary" id="moveSubmitBtn" disabled>Перенести</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-cancel" hidden role="dialog" aria-modal="true" aria-labelledby="cancelTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="cancelTitle">Отменить запись?</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body"><p style="margin:0;color:var(--ink-2);font-size:14px" id="cancelCtx"></p></div>
+  <div class="sheet__foot">
+    <button class="btn btn--ghost" data-close>Оставить</button>
+    <button class="btn btn--danger" id="cancelSubmitBtn">Отменить запись</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-service" hidden role="dialog" aria-modal="true" aria-labelledby="svcTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="svcTitle">Услуга</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body">
+    <label class="field"><span class="field__label">Название</span><input class="input" id="svcName"></label>
+    <div class="grid2">
+      <label class="field"><span class="field__label">Длительность, мин</span><input class="input" id="svcDur" inputmode="numeric"></label>
+      <label class="field"><span class="field__label">Цена, ₽</span><input class="input" id="svcPrice" inputmode="numeric"></label>
     </div>
-    <div id="apptTableWrap"></div>
-  </section>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <button class="switch" role="switch" id="svcActive" aria-checked="true"></button>
+      <span class="field__label" style="margin:0">Активна (видна в записи через WhatsApp)</span>
+    </label>
+    <span class="field__label">Кто выполняет</span>
+    <div class="filters" id="svcMasterChips" style="padding:0;margin:0 0 6px"></div>
+    <p class="hint" id="svcHint"></p>
+  </div>
+  <div class="sheet__foot">
+    <button class="btn btn--ghost" data-close>Отмена</button>
+    <button class="btn btn--primary" id="svcSubmitBtn">Сохранить</button>
+  </div>
+</div>
 
-  <section id="tab-services" hidden>
-    <table>
-      <thead>
-        <tr><th>Название</th><th>Мин</th><th>Цена ₽</th><th>Активна</th><th></th></tr>
-      </thead>
-      <tbody id="servicesBody"></tbody>
-      <tfoot>
-        <tr class="add-row">
-          <td><input id="newSvcName" placeholder="Новая услуга"></td>
-          <td><input id="newSvcDuration" type="number" value="60" style="width:60px"></td>
-          <td><input id="newSvcPrice" type="number" style="width:80px"></td>
-          <td></td>
-          <td><button id="newSvcAdd">Добавить</button></td>
-        </tr>
-      </tfoot>
-    </table>
-  </section>
+<div class="sheet" id="sheet-master" hidden role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="mTitle">Мастер</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body" style="padding-top:4px"><div class="card" id="sheetMasterList"></div></div>
+</div>
 
-  <section id="tab-hours" hidden>
-    <div class="toolbar">
-      <select id="hoursMaster"></select>
+<div class="sheet" id="sheet-status" hidden role="dialog" aria-modal="true" aria-labelledby="sTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="sTitle">Статус</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body" style="padding-top:4px">
+    <div class="card">
+      <button class="row" data-status=""><span class="row__main"><span class="row__title">Все</span></span></button>
+      <button class="row" data-status="confirmed"><span class="row__main"><span class="row__title">Подтверждённые</span></span></button>
+      <button class="row" data-status="completed"><span class="row__main"><span class="row__title">Завершённые</span></span></button>
+      <button class="row" data-status="cancelled"><span class="row__main"><span class="row__title">Отменённые</span></span></button>
     </div>
-    <div id="hoursWrap"></div>
-  </section>
+  </div>
+</div>
 
-</main>
+<div class="sheet" id="sheet-date" hidden role="dialog" aria-modal="true" aria-labelledby="dTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="dTitle">Выбрать дату</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body"><label class="field"><span class="field__label">Дата</span><input class="input" type="date" id="pickDate"></label></div>
+  <div class="sheet__foot">
+    <button class="btn btn--ghost" id="pickTodayBtn">Сегодня</button>
+    <button class="btn btn--primary" id="pickShowBtn">Показать</button>
+  </div>
+</div>
 
 <script>
-const DAY_NAMES = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
-const STATUS_LABEL = { confirmed: 'подтверждена', cancelled: 'отменена', completed: 'завершена' };
+'use strict';
 
+// ── API helper (same contract as before: 401 → login, throws parsed error json) ──
 async function api(path, opts) {
-  const res = await fetch('/admin' + path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...opts,
-  });
+  const res = await fetch('/admin' + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
   if (res.status === 401) { window.location.href = '/admin/login'; throw new Error('unauthorized'); }
   if (!res.ok) throw await res.json().catch(() => ({ error: 'request_failed' }));
+  if (res.status === 204) return null;
   return res.json();
 }
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtMoney(v) { return Math.round(Number(v)).toLocaleString('ru-RU') + ' ₽'; }
+function fmtTime(t) { return String(t || '').slice(0, 5); }
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+function addDaysISO(dateStr, n) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+// Mirrors src/utils.js getDayOfWeek: 0=Mon … 6=Sun
+function dowMon0(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const jsDay = d.getUTCDay();
+  return jsDay === 0 ? 6 : jsDay - 1;
+}
+const DOW_SHORT = ['пн','вт','ср','чт','пт','сб','вс'];
+const MONTHS_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+function fmtDayShort(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`;
+}
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
 
-// ── Tabs ─────────────────────────────────────────────────────────────────
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('main > section').forEach(s => s.hidden = true);
-    btn.classList.add('active');
-    document.getElementById('tab-' + btn.dataset.tab).hidden = false;
-  });
+// ── State ──────────────────────────────────────────────────────────────
+const state = {
+  masters: [],
+  services: [],
+  date: todayISO(),
+  filterMasterId: null,   // null = all
+  filterStatus: 'confirmed',
+  appts: [],              // currently rendered day's appointments
+  weekCounts: {},         // date -> count, for day-strip dots
+  hoursCache: {},         // masterId -> working_hours rows
+  hoursMasterId: null,
+  newAppt: { serviceId: null, masterId: null, slot: null, masters: [] },
+  move: { apptId: null, masterId: null, durationMin: null, slot: null },
+  svc: { id: null, masterIds: [] },
+};
+
+// ── Screens ────────────────────────────────────────────────────────────
+function goto(name) {
+  document.querySelectorAll('.screen').forEach(s => s.hidden = (s.id !== 'screen-' + name));
+  document.querySelectorAll('[data-goto]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.goto === name)));
+  window.scrollTo({ top: 0 });
+  if (name === 'uslugi') loadServices();
+  if (name === 'chasy') loadHoursScreen();
+}
+document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => goto(b.dataset.goto)));
+
+// ── Sheets ─────────────────────────────────────────────────────────────
+let scrim = null;
+function closeSheet() {
+  document.querySelectorAll('.sheet').forEach(s => s.hidden = true);
+  if (scrim) { scrim.remove(); scrim = null; }
+  document.body.style.overflow = '';
+}
+function openSheet(id) {
+  const s = document.getElementById(id);
+  if (!s) return;
+  closeSheet();
+  scrim = document.createElement('div');
+  scrim.className = 'scrim';
+  scrim.addEventListener('click', closeSheet);
+  document.body.appendChild(scrim);
+  s.hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+document.addEventListener('click', e => {
+  const open = e.target.closest('[data-sheet]');
+  if (open) { openSheet(open.dataset.sheet); return; }
+  if (e.target.closest('[data-close]')) closeSheet();
 });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
 
+function single(container, selector, onPick) {
+  container.addEventListener('click', e => {
+    const b = e.target.closest(selector);
+    if (!b || b.disabled) return;
+    container.querySelectorAll(selector).forEach(x => x.setAttribute('aria-pressed', 'false'));
+    b.setAttribute('aria-pressed', 'true');
+    if (onPick) onPick(b);
+  });
+}
+
+// ── Theme toggle ─────────────────────────────────────────────────────────
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem('admin-theme'); } catch {}
+  if (saved) document.documentElement.dataset.theme = saved;
+})();
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const cur = document.documentElement.dataset.theme ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem('admin-theme', next); } catch {}
+});
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   await api('/logout', { method: 'POST' });
   window.location.href = '/admin/login';
 });
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  loadAppointments(); loadWeekCounts();
+  if (!document.getElementById('screen-uslugi').hidden) loadServices();
+  if (!document.getElementById('screen-chasy').hidden) loadHoursScreen();
+});
 
-// ── Masters (shared dropdowns) ───────────────────────────────────────────
-let masters = [];
-async function loadMasters() {
-  masters = await api('/api/masters');
-  const apptSel = document.getElementById('apptMaster');
-  const hoursSel = document.getElementById('hoursMaster');
-  for (const m of masters) {
-    apptSel.insertAdjacentHTML('beforeend', `<option value="${m.id}">${escapeHtml(m.name)}</option>`);
-    hoursSel.insertAdjacentHTML('beforeend', `<option value="${m.id}">${escapeHtml(m.name)}</option>`);
+// ── Day strip ──────────────────────────────────────────────────────────
+function renderDayStrip() {
+  const wrap = document.getElementById('dayStrip');
+  const days = [];
+  for (let i = -2; i <= 11; i++) days.push(addDaysISO(todayISO(), i));
+  wrap.innerHTML = days.map(d => {
+    const dow = dowMon0(d);
+    const count = state.weekCounts[d] || 0;
+    const dots = Array.from({ length: Math.min(count, 3) }, () => '<i></i>').join('');
+    return `<button class="day" data-date="${d}" aria-pressed="${d === state.date}">
+      <span class="day__dow">${DOW_SHORT[dow]}</span><span class="day__num">${d.slice(8, 10)}</span>
+      <span class="day__dots">${dots}</span></button>`;
+  }).join('');
+  wrap.querySelectorAll('.day').forEach(b => b.addEventListener('click', () => {
+    state.date = b.dataset.date;
+    renderDayStrip();
+    loadAppointments();
+  }));
+  const active = wrap.querySelector('[aria-pressed="true"]');
+  if (active) active.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
+
+async function loadWeekCounts() {
+  const from = addDaysISO(todayISO(), -2);
+  const to = addDaysISO(todayISO(), 11);
+  const rows = await api(`/api/appointments?dateFrom=${from}&dateTo=${to}`);
+  state.weekCounts = {};
+  for (const a of rows) {
+    const d = String(a.appointment_date).slice(0, 10);
+    state.weekCounts[d] = (state.weekCounts[d] || 0) + 1;
   }
+  renderDayStrip();
 }
 
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+// ── Filters ────────────────────────────────────────────────────────────
+function masterName(id) {
+  const m = state.masters.find(x => x.id === id);
+  return m ? m.name : '';
+}
+const STATUS_LABEL = { '': 'Все статусы', confirmed: 'Подтверждённые', completed: 'Завершённые', cancelled: 'Отменённые' };
+
+function renderFilterChips() {
+  document.getElementById('chipMaster').firstChild.textContent =
+    (state.filterMasterId ? masterName(state.filterMasterId) : 'Все мастера') + ' ';
+  document.getElementById('chipStatus').firstChild.textContent = STATUS_LABEL[state.filterStatus] + ' ';
+  document.getElementById('chipDate').firstChild.textContent =
+    (state.date === todayISO() ? 'Другая дата' : fmtDayShort(state.date)) + ' ';
 }
 
-// ── Appointments ─────────────────────────────────────────────────────────
-async function loadAppointments() {
-  const date = document.getElementById('apptDate').value;
-  const masterId = document.getElementById('apptMaster').value;
-  const status = document.getElementById('apptStatus').value;
-  const qs = new URLSearchParams();
-  if (date) qs.set('date', date);
-  if (masterId) qs.set('masterId', masterId);
-  if (status) qs.set('status', status);
-
-  const rows = await api('/api/appointments?' + qs.toString());
-  const wrap = document.getElementById('apptTableWrap');
-
-  if (!rows.length) {
-    wrap.innerHTML = '<div class="empty">Ничего не найдено</div>';
-    return;
-  }
-
-  wrap.innerHTML = `<table>
-    <thead><tr><th>#</th><th>Дата</th><th>Время</th><th>Клиент</th><th>Услуга</th><th>Мастер</th><th>Статус</th><th></th></tr></thead>
-    <tbody>${rows.map(rowHtml).join('')}</tbody>
-  </table>`;
-
-  wrap.querySelectorAll('[data-cancel]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!confirm('Отменить запись #' + btn.dataset.cancel + '?')) return;
-      await api(`/api/appointments/${btn.dataset.cancel}/cancel`, { method: 'POST' });
-      loadAppointments();
-    });
-  });
-
-  wrap.querySelectorAll('[data-reschedule-toggle]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const row = document.getElementById('resched-' + btn.dataset.rescheduleToggle);
-      row.style.display = row.style.display === 'none' ? '' : 'none';
-    });
-  });
-
-  wrap.querySelectorAll('[data-reschedule-save]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.rescheduleSave;
-      const date = document.getElementById('resched-date-' + id).value;
-      const startTime = document.getElementById('resched-start-' + id).value;
-      const endTime = document.getElementById('resched-end-' + id).value;
-      const msg = document.getElementById('resched-msg-' + id);
-      if (!date || !startTime || !endTime) { msg.textContent = 'Заполните все поля'; msg.className = 'msg err'; return; }
-      try {
-        await api(`/api/appointments/${id}/reschedule`, { method: 'POST', body: JSON.stringify({ date, startTime, endTime }) });
-        loadAppointments();
-      } catch (e) {
-        msg.textContent = e.error === 'slot_taken' ? 'Слот занят' : 'Ошибка';
-        msg.className = 'msg err';
-      }
-    });
-  });
-}
-
-function rowHtml(a) {
-  const date = String(a.appointment_date).slice(0, 10);
-  const start = String(a.start_time).slice(0, 5);
-  const end = String(a.end_time).slice(0, 5);
-  const canAct = a.status === 'confirmed';
-  return `
-    <tr>
-      <td>#${a.id}</td>
-      <td>${date}</td>
-      <td>${start}–${end}</td>
-      <td>${escapeHtml(a.user_name)}</td>
-      <td>${escapeHtml(a.service_name)}</td>
-      <td>${escapeHtml(a.master_name)}</td>
-      <td class="status-${a.status}">${STATUS_LABEL[a.status] || a.status}</td>
-      <td class="actions">
-        ${canAct ? `
-          <button data-reschedule-toggle="${a.id}">Перенести</button>
-          <button class="danger" data-cancel="${a.id}">Отменить</button>
-        ` : ''}
-      </td>
-    </tr>
-    ${canAct ? `
-    <tr id="resched-${a.id}" class="reschedule-row" style="display:none">
-      <td colspan="8">
-        <input type="date" id="resched-date-${a.id}" value="${date}">
-        <input type="time" id="resched-start-${a.id}" value="${start}">
-        <input type="time" id="resched-end-${a.id}" value="${end}">
-        <button data-reschedule-save="${a.id}">Сохранить</button>
-        <span class="msg" id="resched-msg-${a.id}"></span>
-      </td>
-    </tr>` : ''}
-  `;
-}
-
-document.getElementById('apptReload').addEventListener('click', loadAppointments);
-document.getElementById('apptMaster').addEventListener('change', loadAppointments);
-document.getElementById('apptStatus').addEventListener('change', loadAppointments);
-document.getElementById('apptDate').addEventListener('change', loadAppointments);
-document.getElementById('apptClearDate').addEventListener('click', () => {
-  document.getElementById('apptDate').value = '';
+document.getElementById('sheetMasterList').addEventListener('click', e => {
+  const row = e.target.closest('[data-master-id]');
+  if (!row) return;
+  state.filterMasterId = row.dataset.masterId ? Number(row.dataset.masterId) : null;
+  renderFilterChips();
+  closeSheet();
   loadAppointments();
 });
-
-// ── Services ─────────────────────────────────────────────────────────────
-async function loadServices() {
-  const services = await api('/api/services');
-  const body = document.getElementById('servicesBody');
-  body.innerHTML = services.map(s => `
-    <tr data-id="${s.id}">
-      <td><input class="svc-name" value="${escapeHtml(s.name)}"></td>
-      <td><input class="svc-duration" type="number" style="width:60px" value="${s.duration_minutes}"></td>
-      <td><input class="svc-price" type="number" style="width:80px" value="${s.price}"></td>
-      <td><input class="svc-active" type="checkbox" ${s.is_active ? 'checked' : ''}></td>
-      <td><button data-save-svc="${s.id}">Сохранить</button> <span class="msg" id="svc-msg-${s.id}"></span></td>
-    </tr>
-  `).join('');
-
-  body.querySelectorAll('[data-save-svc]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.saveSvc;
-      const tr = body.querySelector(`tr[data-id="${id}"]`);
-      const msg = document.getElementById('svc-msg-' + id);
-      try {
-        await api(`/api/services/${id}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            name: tr.querySelector('.svc-name').value,
-            duration_minutes: parseInt(tr.querySelector('.svc-duration').value, 10),
-            price: parseFloat(tr.querySelector('.svc-price').value),
-            is_active: tr.querySelector('.svc-active').checked,
-          }),
-        });
-        msg.textContent = 'Сохранено'; msg.className = 'msg ok';
-      } catch {
-        msg.textContent = 'Ошибка'; msg.className = 'msg err';
-      }
-    });
-  });
-}
-
-document.getElementById('newSvcAdd').addEventListener('click', async () => {
-  const name = document.getElementById('newSvcName').value.trim();
-  const duration_minutes = parseInt(document.getElementById('newSvcDuration').value, 10);
-  const price = parseFloat(document.getElementById('newSvcPrice').value);
-  if (!name || !duration_minutes || !price) return alert('Заполните все поля');
-  await api('/api/services', { method: 'POST', body: JSON.stringify({ name, duration_minutes, price }) });
-  document.getElementById('newSvcName').value = '';
-  document.getElementById('newSvcPrice').value = '';
-  loadServices();
+document.querySelector('#sheet-status .card').addEventListener('click', e => {
+  const row = e.target.closest('[data-status]');
+  if (!row) return;
+  state.filterStatus = row.dataset.status;
+  renderFilterChips();
+  closeSheet();
+  loadAppointments();
+});
+document.getElementById('chipReset').addEventListener('click', () => {
+  state.filterMasterId = null;
+  state.filterStatus = 'confirmed';
+  state.date = todayISO();
+  renderFilterChips();
+  renderDayStrip();
+  loadAppointments();
+});
+document.getElementById('pickTodayBtn').addEventListener('click', () => {
+  state.date = todayISO();
+  document.getElementById('pickDate').value = state.date;
+  renderFilterChips(); renderDayStrip(); closeSheet(); loadAppointments();
+});
+document.getElementById('pickShowBtn').addEventListener('click', () => {
+  const v = document.getElementById('pickDate').value;
+  if (!v) return;
+  state.date = v;
+  renderFilterChips(); renderDayStrip(); closeSheet(); loadAppointments();
+});
+document.getElementById('sheet-date').addEventListener('transitionend', () => {});
+document.querySelector('[data-sheet="sheet-date"]').addEventListener('click', () => {
+  document.getElementById('pickDate').value = state.date;
 });
 
-// ── Working hours ────────────────────────────────────────────────────────
-async function loadHours() {
-  const masterId = document.getElementById('hoursMaster').value;
-  if (!masterId) return;
-  const hours = await api('/api/working-hours?masterId=' + masterId);
-  const byDay = Object.fromEntries(hours.map(h => [h.day_of_week, h]));
-  const wrap = document.getElementById('hoursWrap');
-
-  wrap.innerHTML = DAY_NAMES.map((name, i) => {
-    const h = byDay[i];
-    return `
-      <div class="hours-day">
-        <span>${name}</span>
-        <input type="time" id="hours-start-${i}" value="${h ? String(h.start_time).slice(0,5) : ''}">
-        <span>–</span>
-        <input type="time" id="hours-end-${i}" value="${h ? String(h.end_time).slice(0,5) : ''}">
-        <button data-save-hours="${i}">Сохранить</button>
-        <span class="msg" id="hours-msg-${i}"></span>
-      </div>
-    `;
-  }).join('');
-
-  wrap.querySelectorAll('[data-save-hours]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const day = btn.dataset.saveHours;
-      const startTime = document.getElementById('hours-start-' + day).value || null;
-      const endTime = document.getElementById('hours-end-' + day).value || null;
-      const msg = document.getElementById('hours-msg-' + day);
-      try {
-        await api('/api/working-hours', {
-          method: 'PUT',
-          body: JSON.stringify({ masterId: parseInt(masterId, 10), dayOfWeek: parseInt(day, 10), startTime, endTime }),
-        });
-        msg.textContent = startTime ? 'Сохранено' : 'Выходной'; msg.className = 'msg ok';
-      } catch {
-        msg.textContent = 'Ошибка'; msg.className = 'msg err';
-      }
-    });
-  });
+// ── Appointments / timeline ────────────────────────────────────────────
+async function loadAppointments() {
+  const qs = new URLSearchParams({ date: state.date });
+  if (state.filterMasterId) qs.set('masterId', state.filterMasterId);
+  if (state.filterStatus) qs.set('status', state.filterStatus);
+  state.appts = await api('/api/appointments?' + qs.toString());
+  await renderTimeline();
 }
 
-document.getElementById('hoursMaster').addEventListener('change', loadHours);
+async function getMasterHours(masterId, dow) {
+  if (!state.hoursCache[masterId]) {
+    state.hoursCache[masterId] = await api('/api/working-hours?masterId=' + masterId);
+  }
+  return state.hoursCache[masterId].find(h => h.day_of_week === dow) || null;
+}
 
-// ── Init ─────────────────────────────────────────────────────────────────
+function toMin(t) { const [h, m] = fmtTime(t).split(':').map(Number); return h * 60 + m; }
+function toHHMM(min) { return `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`; }
+
+async function renderTimeline() {
+  const timeline = document.getElementById('timeline');
+  const empty = document.getElementById('emptyState');
+  const daybar = document.getElementById('dayBar');
+  const sorted = [...state.appts].sort((a, b) => fmtTime(a.start_time).localeCompare(fmtTime(b.start_time)));
+
+  const confirmed = sorted.filter(a => a.status === 'confirmed');
+  const revenue = confirmed.reduce((sum, a) => sum + Number(a.price || 0), 0);
+
+  let gapsHtml = '';
+  let gapsInfo = '<span class="dot"></span><span>выберите одного мастера, чтобы увидеть окна</span>';
+  if (state.filterMasterId) {
+    const dow = dowMon0(state.date);
+    const hours = await getMasterHours(state.filterMasterId, dow);
+    if (hours) {
+      const start = toMin(hours.start_time), end = toMin(hours.end_time);
+      let cursor = start;
+      const gaps = [];
+      for (const a of confirmed) {
+        const s = toMin(a.start_time), e = toMin(a.end_time);
+        if (s > cursor) gaps.push({ start: cursor, end: s });
+        cursor = Math.max(cursor, e);
+      }
+      if (cursor < end) gaps.push({ start: cursor, end });
+      gapsInfo = `<span class="dot"></span><span>${gaps.length} окон${gaps.length === 1 ? 'о' : ''}</span>`;
+      gapsHtml = gaps.filter(g => g.end - g.start >= 10).map(g => `
+        <li class="tl-gap">
+          <div class="tl-gap__rail"></div>
+          <div class="tl-gap__body">окно <b>${g.end - g.start} мин</b>
+            <button class="tl-gap__add" data-gap-start="${toHHMM(g.start)}">+ записать</button></div>
+        </li>`).join('');
+    } else {
+      gapsInfo = '<span class="dot"></span><span>у мастера выходной</span>';
+    }
+  }
+
+  daybar.innerHTML = `<b>${sorted.length} запис${sorted.length === 1 ? 'ь' : sorted.length < 5 ? 'и' : 'ей'}</b>
+    <span class="dot"></span><span>выручка <b class="num">${fmtMoney(revenue)}</b></span>${gapsInfo}`;
+
+  if (!sorted.length) {
+    timeline.innerHTML = '';
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+
+  timeline.innerHTML = sorted.map(a => apptCardHtml(a)).join('') + gapsHtml;
+
+  timeline.querySelectorAll('[data-move]').forEach(b => b.addEventListener('click', () => openMoveSheet(b.dataset.move)));
+  timeline.querySelectorAll('[data-cancel]').forEach(b => b.addEventListener('click', () => openCancelSheet(b.dataset.cancel)));
+  timeline.querySelectorAll('[data-gap-start]').forEach(b => b.addEventListener('click', () => openNewSheet({
+    masterId: state.filterMasterId, date: state.date,
+  })));
+}
+
+function statusPill(status) {
+  if (status === 'confirmed') return '<span class="status status--ok"><i></i>подтверждена</span>';
+  if (status === 'completed') return '<span class="status status--wait"><i></i>завершена</span>';
+  return '<span class="status status--off"><i></i>отменена</span>';
+}
+
+function apptCardHtml(a) {
+  const isConfirmed = a.status === 'confirmed';
+  const durMin = toMin(a.end_time) - toMin(a.start_time);
+  const initial = (a.master_name || '?').trim()[0] || '?';
+  return `
+    <li class="tl${!isConfirmed ? ' tl--off' : ''}">
+      <div class="tl__rail"><span class="tl__time num">${fmtTime(a.start_time)}</span><span class="tl__mark"></span></div>
+      <article class="appt${!isConfirmed ? ' appt--off' : ''}">
+        <div class="appt__top">
+          <h2 class="appt__client">${escapeHtml(a.user_name)}</h2>
+          <span class="appt__id">#${a.id}</span>
+        </div>
+        <p class="appt__svc">${escapeHtml(a.service_name)}</p>
+        <div class="appt__meta">
+          <span class="master"><span class="ava">${escapeHtml(initial)}</span>${escapeHtml(a.master_name)}</span>
+          <span class="appt__dur">${durMin} мин · до ${fmtTime(a.end_time)}</span>
+          ${statusPill(a.status)}
+        </div>
+        ${isConfirmed ? `
+        <div class="appt__actions">
+          <button class="btn btn--ghost" data-move="${a.id}">
+            <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Перенести</button>
+          <button class="btn btn--danger" data-cancel="${a.id}">Отменить</button>
+          <a class="btn btn--soft btn--icon" href="tel:+${a.user_id}" aria-label="Позвонить клиенту">
+            <svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a12 12 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></a>
+        </div>` : ''}
+      </article>
+    </li>`;
+}
+
+document.getElementById('emptyAddBtn').addEventListener('click', () => openNewSheet({ masterId: state.filterMasterId, date: state.date }));
+document.getElementById('fabAdd').addEventListener('click', () => openNewSheet({ masterId: state.filterMasterId, date: state.date }));
+
+// ── Sheet: Новая запись ─────────────────────────────────────────────────
+async function openNewSheet({ masterId, date }) {
+  state.newAppt = { serviceId: null, masterId: masterId || null, slot: null, masters: [] };
+  document.getElementById('newPhone').value = '';
+  document.getElementById('newName').value = '';
+  document.getElementById('newDate').value = date || state.date;
+  document.getElementById('newSlots').innerHTML = '';
+  document.getElementById('newHint').textContent = '';
+  document.getElementById('newSubmitBtn').disabled = true;
+
+  const chips = document.getElementById('newServiceChips');
+  chips.innerHTML = state.services.filter(s => s.is_active).map(s =>
+    `<button class="chip" data-service-id="${s.id}">${escapeHtml(s.name)}</button>`).join('');
+  document.getElementById('newMasterChips').innerHTML = '<span class="hint">сначала выберите услугу</span>';
+  openSheet('sheet-new');
+}
+single(document.getElementById('newServiceChips'), '.chip', async b => {
+  state.newAppt.serviceId = Number(b.dataset.serviceId);
+  state.newAppt.masterId = null;
+  const masters = await api(`/api/services/${state.newAppt.serviceId}/masters`);
+  state.newAppt.masters = masters;
+  const wrap = document.getElementById('newMasterChips');
+  wrap.innerHTML = masters.length
+    ? masters.map(m => `<button class="chip" data-master-id="${m.id}">${escapeHtml(m.name)}</button>`).join('')
+    : '<span class="hint">нет мастеров для этой услуги</span>';
+  refreshNewSlots();
+});
+single(document.getElementById('newMasterChips'), '.chip', b => {
+  state.newAppt.masterId = Number(b.dataset.masterId);
+  refreshNewSlots();
+});
+document.getElementById('newDate').addEventListener('change', refreshNewSlots);
+async function refreshNewSlots() {
+  const grid = document.getElementById('newSlots');
+  const hint = document.getElementById('newHint');
+  state.newAppt.slot = null;
+  document.getElementById('newSubmitBtn').disabled = true;
+  const { serviceId, masterId } = state.newAppt;
+  const date = document.getElementById('newDate').value;
+  if (!serviceId || !masterId || !date) { grid.innerHTML = ''; hint.textContent = ''; return; }
+  const service = state.services.find(s => s.id === serviceId);
+  const slots = await api(`/api/available-slots?masterId=${masterId}&date=${date}&durationMinutes=${service.duration_minutes}`);
+  grid.innerHTML = slots.map(s => `<button class="slot" data-start="${s.start}" data-end="${s.end}">${s.start}</button>`).join('');
+  hint.textContent = slots.length ? '' : 'Нет свободных слотов на эту дату';
+}
+single(document.getElementById('newSlots'), '.slot', b => {
+  state.newAppt.slot = { start: b.dataset.start, end: b.dataset.end };
+  document.getElementById('newSubmitBtn').disabled = false;
+});
+document.getElementById('newSubmitBtn').addEventListener('click', async () => {
+  const { serviceId, masterId, slot } = state.newAppt;
+  const phone = document.getElementById('newPhone').value.trim();
+  const name = document.getElementById('newName').value.trim();
+  const date = document.getElementById('newDate').value;
+  const hint = document.getElementById('newHint');
+  if (!phone || !serviceId || !masterId || !slot) { hint.textContent = 'Заполните телефон, услугу, мастера и время'; return; }
+  try {
+    await api('/api/appointments', {
+      method: 'POST',
+      body: JSON.stringify({ phone, name, serviceId, masterId, date, startTime: slot.start, endTime: slot.end }),
+    });
+    closeSheet();
+    toast('Запись создана');
+    loadAppointments(); loadWeekCounts();
+  } catch (e) {
+    hint.textContent = e.error === 'slot_taken' ? 'Слот уже занят, обновите список' : 'Не получилось создать запись';
+    if (e.error === 'slot_taken') refreshNewSlots();
+  }
+});
+
+// ── Sheet: Перенести ─────────────────────────────────────────────────────
+async function openMoveSheet(apptId) {
+  const appt = state.appts.find(a => String(a.id) === String(apptId));
+  if (!appt) return;
+  state.move = { apptId: appt.id, masterId: appt.master_id, durationMin: toMin(appt.end_time) - toMin(appt.start_time), slot: null };
+  document.getElementById('moveCtx').innerHTML =
+    `<span class="ava">${escapeHtml((appt.master_name||'?')[0]||'?')}</span>
+     <span><b>${escapeHtml(appt.user_name)}</b><br><span class="old">${String(appt.appointment_date).slice(0,10)} ${fmtTime(appt.start_time)}–${fmtTime(appt.end_time)}</span></span>`;
+  document.getElementById('moveDate').value = String(appt.appointment_date).slice(0, 10);
+  document.getElementById('moveSubmitBtn').disabled = true;
+  document.getElementById('moveSubmitBtn').textContent = 'Перенести';
+  await refreshMoveSlots();
+  openSheet('sheet-move');
+}
+document.getElementById('moveDate').addEventListener('change', refreshMoveSlots);
+async function refreshMoveSlots() {
+  const grid = document.getElementById('moveSlots');
+  const hint = document.getElementById('moveHint');
+  state.move.slot = null;
+  document.getElementById('moveSubmitBtn').disabled = true;
+  const date = document.getElementById('moveDate').value;
+  if (!date) return;
+  const { masterId, durationMin, apptId } = state.move;
+  const slots = await api(`/api/available-slots?masterId=${masterId}&date=${date}&durationMinutes=${durationMin}&excludeApptId=${apptId}`);
+  grid.innerHTML = slots.map(s => `<button class="slot" data-start="${s.start}" data-end="${s.end}">${s.start}</button>`).join('');
+  hint.textContent = slots.length ? '' : 'Нет свободных слотов на эту дату';
+}
+single(document.getElementById('moveSlots'), '.slot', b => {
+  state.move.slot = { start: b.dataset.start, end: b.dataset.end };
+  document.getElementById('moveSubmitBtn').disabled = false;
+  document.getElementById('moveSubmitBtn').textContent = `Перенести на ${b.dataset.start}`;
+});
+document.getElementById('moveSubmitBtn').addEventListener('click', async () => {
+  const { apptId, slot } = state.move;
+  const date = document.getElementById('moveDate').value;
+  if (!slot) return;
+  try {
+    await api(`/api/appointments/${apptId}/reschedule`, {
+      method: 'POST', body: JSON.stringify({ date, startTime: slot.start, endTime: slot.end }),
+    });
+    closeSheet(); toast('Запись перенесена');
+    loadAppointments(); loadWeekCounts();
+  } catch (e) {
+    document.getElementById('moveHint').textContent = e.error === 'slot_taken' ? 'Слот уже занят' : 'Ошибка переноса';
+  }
+});
+
+// ── Sheet: Отменить ───────────────────────────────────────────────────────
+function openCancelSheet(apptId) {
+  const appt = state.appts.find(a => String(a.id) === String(apptId));
+  if (!appt) return;
+  state.move.cancelApptId = appt.id;
+  document.getElementById('cancelCtx').textContent =
+    `${appt.user_name} — ${appt.service_name}, ${fmtTime(appt.start_time)}–${fmtTime(appt.end_time)}. Клиент получит уведомление, слот снова станет свободным.`;
+  openSheet('sheet-cancel');
+}
+document.getElementById('cancelSubmitBtn').addEventListener('click', async () => {
+  const id = state.move.cancelApptId;
+  await api(`/api/appointments/${id}/cancel`, { method: 'POST' });
+  closeSheet(); toast('Запись отменена');
+  loadAppointments(); loadWeekCounts();
+});
+
+// ── Услуги ────────────────────────────────────────────────────────────
+async function loadServices() {
+  state.services = await api('/api/services');
+  document.getElementById('uslugiSub').textContent = `${state.services.length} услуг`;
+  document.getElementById('servicesCard').innerHTML = state.services.map(s => `
+    <button class="row" data-edit-service="${s.id}">
+      <span class="row__main">
+        <span class="row__title">${escapeHtml(s.name)}${s.is_active ? '' : ' (скрыта)'}</span>
+        <span class="row__sub">${s.duration_minutes} мин</span>
+      </span>
+      <span class="row__price">${fmtMoney(s.price)}</span>
+      <svg class="row__chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+    </button>`).join('');
+  document.getElementById('servicesCard').querySelectorAll('[data-edit-service]').forEach(b =>
+    b.addEventListener('click', () => openServiceSheet(Number(b.dataset.editService))));
+}
+async function openServiceSheet(id) {
+  document.getElementById('svcHint').textContent = '';
+  if (id) {
+    const s = state.services.find(x => x.id === id);
+    document.getElementById('svcTitle').textContent = 'Услуга';
+    document.getElementById('svcName').value = s.name;
+    document.getElementById('svcDur').value = s.duration_minutes;
+    document.getElementById('svcPrice').value = Math.round(Number(s.price));
+    document.getElementById('svcActive').setAttribute('aria-checked', String(!!s.is_active));
+    const assigned = await api(`/api/services/${id}/masters`);
+    state.svc = { id, masterIds: assigned.map(m => m.id) };
+  } else {
+    document.getElementById('svcTitle').textContent = 'Новая услуга';
+    document.getElementById('svcName').value = '';
+    document.getElementById('svcDur').value = '60';
+    document.getElementById('svcPrice').value = '';
+    document.getElementById('svcActive').setAttribute('aria-checked', 'true');
+    state.svc = { id: null, masterIds: [] };
+  }
+  document.getElementById('svcMasterChips').innerHTML = state.masters.map(m =>
+    `<button class="chip${state.svc.masterIds.includes(m.id) ? ' chip--on' : ''}" data-master-id="${m.id}">${escapeHtml(m.name)}</button>`).join('');
+  openSheet('sheet-service');
+}
+document.getElementById('addServiceBtn').addEventListener('click', () => openServiceSheet(null));
+document.getElementById('svcActive').addEventListener('click', function () {
+  this.setAttribute('aria-checked', String(this.getAttribute('aria-checked') !== 'true'));
+});
+document.getElementById('svcMasterChips').addEventListener('click', e => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  const id = Number(b.dataset.masterId);
+  const i = state.svc.masterIds.indexOf(id);
+  if (i === -1) { state.svc.masterIds.push(id); b.classList.add('chip--on'); }
+  else { state.svc.masterIds.splice(i, 1); b.classList.remove('chip--on'); }
+});
+document.getElementById('svcSubmitBtn').addEventListener('click', async () => {
+  const name = document.getElementById('svcName').value.trim();
+  const duration_minutes = parseInt(document.getElementById('svcDur').value, 10);
+  const price = parseFloat(document.getElementById('svcPrice').value);
+  const is_active = document.getElementById('svcActive').getAttribute('aria-checked') === 'true';
+  const hint = document.getElementById('svcHint');
+  if (!name || !duration_minutes || !(price >= 0)) { hint.textContent = 'Заполните название, длительность и цену'; return; }
+  try {
+    let id = state.svc.id;
+    if (id) await api(`/api/services/${id}`, { method: 'PUT', body: JSON.stringify({ name, duration_minutes, price, is_active }) });
+    else { const created = await api('/api/services', { method: 'POST', body: JSON.stringify({ name, duration_minutes, price }) }); id = created.id; }
+    await api(`/api/services/${id}/masters`, { method: 'PUT', body: JSON.stringify({ masterIds: state.svc.masterIds }) });
+    closeSheet(); toast('Сохранено');
+    loadServices();
+  } catch { hint.textContent = 'Не получилось сохранить'; }
+});
+
+// ── Часы работы ───────────────────────────────────────────────────────
+const DAY_NAMES_SHORT = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+async function loadHoursScreen() {
+  if (!state.hoursMasterId && state.masters.length) state.hoursMasterId = state.masters[0].id;
+  const chips = document.getElementById('hoursMasterChips');
+  chips.innerHTML = state.masters.map(m =>
+    `<button class="chip${m.id === state.hoursMasterId ? ' chip--on' : ''}" data-master-id="${m.id}">${escapeHtml(m.name)}</button>`).join('');
+  await renderHoursCard();
+}
+document.getElementById('hoursMasterChips').addEventListener('click', async e => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  state.hoursMasterId = Number(b.dataset.masterId);
+  document.querySelectorAll('#hoursMasterChips .chip').forEach(c => c.classList.remove('chip--on'));
+  b.classList.add('chip--on');
+  await renderHoursCard();
+});
+async function renderHoursCard() {
+  if (!state.hoursMasterId) { document.getElementById('hoursCard').innerHTML = '<div class="row"><span class="row__main">Нет мастеров</span></div>'; return; }
+  const hours = await api('/api/working-hours?masterId=' + state.hoursMasterId);
+  delete state.hoursCache[state.hoursMasterId];
+  state.hoursCache[state.hoursMasterId] = hours;
+  const byDay = Object.fromEntries(hours.map(h => [h.day_of_week, h]));
+  const card = document.getElementById('hoursCard');
+  card.innerHTML = DAY_NAMES_SHORT.map((name, i) => {
+    const h = byDay[i];
+    const on = !!h;
+    return `<div class="hoursrow${on ? '' : ' hoursrow--off'}" data-day="${i}">
+      <span class="hoursrow__day">${name}</span>
+      <button class="switch" role="switch" aria-checked="${on}" aria-label="${name}"></button>
+      ${on
+        ? `<span class="timepair"><input class="timeinput" type="time" data-start value="${fmtTime(h.start_time)}"><span>—</span><input class="timeinput" type="time" data-end value="${fmtTime(h.end_time)}"></span>`
+        : `<span class="hoursrow__off">выходной</span>`}
+    </div>`;
+  }).join('');
+
+  card.querySelectorAll('.switch').forEach(sw => sw.addEventListener('click', async () => {
+    const row = sw.closest('.hoursrow');
+    const day = Number(row.dataset.day);
+    const turningOn = sw.getAttribute('aria-checked') !== 'true';
+    if (turningOn) {
+      await api('/api/working-hours', { method: 'PUT', body: JSON.stringify({ masterId: state.hoursMasterId, dayOfWeek: day, startTime: '09:00', endTime: '19:00' }) });
+    } else {
+      await api('/api/working-hours', { method: 'PUT', body: JSON.stringify({ masterId: state.hoursMasterId, dayOfWeek: day, startTime: null, endTime: null }) });
+    }
+    await renderHoursCard();
+  }));
+  card.querySelectorAll('input[type=time]').forEach(inp => inp.addEventListener('change', async () => {
+    const row = inp.closest('.hoursrow');
+    const day = Number(row.dataset.day);
+    const startTime = row.querySelector('[data-start]').value;
+    const endTime = row.querySelector('[data-end]').value;
+    if (!startTime || !endTime) return;
+    await api('/api/working-hours', { method: 'PUT', body: JSON.stringify({ masterId: state.hoursMasterId, dayOfWeek: day, startTime, endTime }) });
+    delete state.hoursCache[state.hoursMasterId];
+    toast('Сохранено');
+  }));
+}
+
+// ── Init ───────────────────────────────────────────────────────────────
 (async function init() {
-  document.getElementById('apptDate').value = new Date().toISOString().slice(0, 10);
-  await loadMasters();
-  if (masters.length) document.getElementById('hoursMaster').value = masters[0].id;
-  await Promise.all([loadAppointments(), loadServices(), loadHours()]);
+  document.getElementById('todayLabel').textContent = fmtDayShort(todayISO());
+  renderFilterChips();
+  state.masters = await api('/api/masters');
+  document.getElementById('sheetMasterList').innerHTML =
+    '<button class="row" data-master-id=""><span class="row__main"><span class="row__title">Все мастера</span></span></button>' +
+    state.masters.map(m => `<button class="row" data-master-id="${m.id}"><span class="row__main"><span class="row__title">${escapeHtml(m.name)}</span></span></button>`).join('');
+  state.services = await api('/api/services');
+  renderDayStrip();
+  await Promise.all([loadAppointments(), loadWeekCounts()]);
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/admin/sw.js').catch(() => {});
+  }
 })();
 </script>
 </body>

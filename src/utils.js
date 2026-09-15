@@ -78,11 +78,11 @@ export async function getAvailableDates(masterId, days = 14) {
 }
 
 // Returns free time slots for master on a given date
-export async function getTimeSlotsForMaster(masterId, dateStr, durationMin) {
+export async function getTimeSlotsForMaster(masterId, dateStr, durationMin, excludeApptId = null) {
   const dow = getDayOfWeek(dateStr);
   const hours = await db.getWorkingHours(masterId, dow);
   if (!hours) return [];
-  const booked = await db.getBookedSlots(masterId, dateStr);
+  const booked = await db.getBookedSlots(masterId, dateStr, excludeApptId);
   return generateSlots(hours.start_time, hours.end_time, durationMin, booked);
 }
 
