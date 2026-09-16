@@ -2,7 +2,7 @@ import { db } from './database.js';
 import { sendText } from './whatsapp.js';
 import { sendMenu } from './menu.js';
 import { getSession, setSession, clearSession } from './session.js';
-import { formatDateShort, formatDateFull, getAvailableDates, getTimeSlotsForMaster } from './utils.js';
+import { formatDateShort, formatDateFull, formatPrice, getAvailableDates, getTimeSlotsForMaster } from './utils.js';
 import * as waitlist from './waitlist.js';
 
 const SLOTS_PAGE_SIZE = 9;
@@ -30,7 +30,7 @@ export async function start(phone) {
 
   const items = services.slice(0, MENU_PAGE_SIZE).map(s => ({
     id: `svc:${s.id}`,
-    label: `${s.name} — ${s.price}₽ · ${s.duration_minutes} мин`,
+    label: `${s.name} — ${formatPrice(s.price)} · ${s.duration_minutes} мин`,
   }));
 
   return sendMenu(phone, '💅 Запись в салон\n\nВыберите услугу (ответьте цифрой):', items);
@@ -66,7 +66,7 @@ export async function chooseService(phone, serviceIdStr) {
 
   return sendMenu(
     phone,
-    `💅 ${service.name}\n💰 ${service.price}₽ · ⏱ ${service.duration_minutes} мин\n\nВыберите мастера (ответьте цифрой):`,
+    `💅 ${service.name}\n💰 ${formatPrice(service.price)} · ⏱ ${service.duration_minutes} мин\n\nВыберите мастера (ответьте цифрой):`,
     items
   );
 }
@@ -157,7 +157,7 @@ export async function chooseSlot(phone, encoded) {
       `👩 Мастер: ${s.masterName}\n` +
       `📅 Дата: ${formatDateFull(s.date)}\n` +
       `🕐 Время: ${s.startTime} – ${s.endTime}\n` +
-      `💰 Стоимость: ${s.servicePrice}₽`,
+      `💰 Стоимость: ${formatPrice(s.servicePrice)}`,
     [
       { id: 'confirm', label: '✅ Подтвердить' },
       { id: 'cancel', label: '❌ Отмена' },
@@ -196,7 +196,7 @@ export async function confirm(phone) {
       `👩 ${s.masterName}\n` +
       `📅 ${formatDateFull(s.date)}\n` +
       `🕐 ${s.startTime} – ${s.endTime}\n` +
-      `💰 ${s.servicePrice}₽\n\n` +
+      `💰 ${formatPrice(s.servicePrice)}\n\n` +
       `📋 Номер записи: #${appt.id}\n\n` +
       `До встречи! 👋`
   );
@@ -238,7 +238,7 @@ export async function showMyBookings(phone) {
       `💅 ${a.service_name}\n` +
       `👩 ${a.master_name}\n` +
       `📅 ${formatDateFull(String(a.appointment_date).slice(0, 10))}\n` +
-      `🕐 ${String(a.start_time).slice(0, 5)} – ${String(a.end_time).slice(0, 5)}  ·  💰 ${a.price}₽\n` +
+      `🕐 ${String(a.start_time).slice(0, 5)} – ${String(a.end_time).slice(0, 5)}  ·  💰 ${formatPrice(a.price)}\n` +
       `#${a.id}\n\n`;
   }
   await sendText(phone, text.trim());

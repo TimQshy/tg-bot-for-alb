@@ -29,7 +29,7 @@ async function main() {
   const result = await askWithSystemPrompt(SYSTEM_PROMPT, userText);
 
   if (!result) {
-    console.error('Оба провайдера (Gemini/DeepSeek) недоступны — проверь GEMINI_API_KEY/DEEPSEEK_API_KEY в .env');
+    console.error('DeepSeek недоступен — проверь DEEPSEEK_API_KEY в .env');
     process.exit(1);
   }
 

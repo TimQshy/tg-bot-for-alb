@@ -1,23 +1,15 @@
-// FAQ-scope AI consultant: Gemini Flash (free tier) as primary, DeepSeek as
-// fallback when Gemini rate-limits. No conversation history — each question
-// is an independent request built from the current services/masters snapshot.
+// FAQ-scope AI consultant, DeepSeek only. No conversation history — each
+// question is an independent request built from the current services/masters
+// snapshot.
 import { db } from './database.js';
 
-const GEMINI_MODEL = 'gemini-2.0-flash'; // verify current free-tier model name at integration time
-const GEMINI_URL = key =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
-
-// After a Gemini rate-limit hit, skip it for a bit instead of retrying every
-// message — the free-tier quota won't recover within seconds anyway.
-const GEMINI_BACKOFF_MS = 60 * 1000;
-let geminiBackoffUntil = 0;
 
 async function buildSystemPrompt() {
   const [services, masters] = await Promise.all([db.getActiveServices(), db.getAllMasters()]);
 
   const servicesText = services
-    .map(s => `- ${s.name}: ${s.price}₽, ${s.duration_minutes} мин`)
+    .map(s => `- ${s.name}: ${s.price} сом, ${s.duration_minutes} мин`)
     .join('\n');
   const mastersText = masters.map(m => `- ${m.name}${m.description ? `: ${m.description}` : ''}`).join('\n');
 
@@ -31,77 +23,37 @@ async function buildSystemPrompt() {
   );
 }
 
-class RateLimitError extends Error {}
-
-async function callGemini(apiKey, systemPrompt, userText) {
-  const res = await fetch(GEMINI_URL(apiKey), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: userText }] }],
-    }),
-  });
-
-  if (res.status === 429) throw new RateLimitError('Gemini rate limited');
-  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${await res.text().catch(() => '')}`);
-
-  const data = await res.json();
-  return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
-}
-
-async function callDeepSeek(apiKey, systemPrompt, userText) {
-  const res = await fetch(DEEPSEEK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userText },
-      ],
-    }),
-  });
-
-  if (!res.ok) throw new Error(`DeepSeek error ${res.status}: ${await res.text().catch(() => '')}`);
-
-  const data = await res.json();
-  return data?.choices?.[0]?.message?.content?.trim() || null;
-}
-
-// Provider fallback logic, independent of the FAQ system prompt — reused by
-// the one-off chat-analysis script (src/scripts/analyzeChats.js) with its
-// own prompt.
+// Reused by the one-off chat-analysis script (src/scripts/analyzeChats.js)
+// with its own prompt.
 export async function askWithSystemPrompt(systemPrompt, userText) {
-  const geminiKey = process.env.GEMINI_API_KEY;
-  const deepseekKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) return null;
 
-  if (geminiKey && Date.now() > geminiBackoffUntil) {
-    try {
-      const answer = await callGemini(geminiKey, systemPrompt, userText);
-      if (answer) return { answer, model: 'gemini' };
-    } catch (err) {
-      if (err instanceof RateLimitError) {
-        geminiBackoffUntil = Date.now() + GEMINI_BACKOFF_MS;
-      } else {
-        console.error('Gemini error:', err.message);
-      }
-    }
+  try {
+    const res = await fetch(DEEPSEEK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userText },
+        ],
+      }),
+    });
+
+    if (!res.ok) throw new Error(`DeepSeek error ${res.status}: ${await res.text().catch(() => '')}`);
+
+    const data = await res.json();
+    const answer = data?.choices?.[0]?.message?.content?.trim();
+    return answer ? { answer, model: 'deepseek' } : null;
+  } catch (err) {
+    console.error('DeepSeek error:', err.message);
+    return null;
   }
-
-  if (deepseekKey) {
-    try {
-      const answer = await callDeepSeek(deepseekKey, systemPrompt, userText);
-      if (answer) return { answer, model: 'deepseek' };
-    } catch (err) {
-      console.error('DeepSeek error:', err.message);
-    }
-  }
-
-  return null;
 }
 
-// Returns the AI's answer, or null if no provider could answer (caller should
+// Returns the AI's answer, or null if DeepSeek couldn't answer (caller should
 // fall back to a static message + main menu).
 export async function askAI(userText) {
   const systemPrompt = await buildSystemPrompt();

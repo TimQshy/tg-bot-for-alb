@@ -88,3 +88,9 @@ export async function getTimeSlotsForMaster(masterId, dateStr, durationMin, excl
 
 export const DAYS_SHORT_EXPORT = DAYS_SHORT;
 export const DAYS_FULL_EXPORT  = DAYS_FULL;
+
+// Postgres returns numeric as a string ("1500.00"), which is not what a
+// client should see in a chat message.
+export function formatPrice(value) {
+  return `${Math.round(Number(value)).toLocaleString('ru-RU')} сом`;
+}
