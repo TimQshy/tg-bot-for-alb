@@ -62,7 +62,7 @@ export async function connectWhatsApp(onIncoming) {
     if (qr) {
       latestQrDataUrl = await QRCode.toDataURL(qr);
       connectionStatus = 'closed';
-      console.log('WhatsApp: scan QR at /admin/wa-qr to link the device');
+      console.log('WhatsApp: scan QR in the admin panel to link the device');
     }
 
     if (connection === 'open') {
@@ -76,7 +76,7 @@ export async function connectWhatsApp(onIncoming) {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
 
       if (statusCode === DisconnectReason.loggedOut) {
-        console.error('WhatsApp: device logged out, clearing session — rescan QR at /admin/wa-qr');
+        console.error('WhatsApp: device logged out, clearing session — rescan QR in the admin panel');
         await db.waAuthDelete('creds').catch(() => {});
         latestQrDataUrl = null;
       }

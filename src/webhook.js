@@ -33,7 +33,12 @@ app.get('/privacy', (_req, res) => {
 </html>`);
 });
 
+// In production nginx strips the /s/<slug> prefix before proxying, but the
+// panel is written against it — mounting both keeps the app runnable without
+// nginx in front. The slug in the path is never trusted: requireAuth checks
+// the token against this process's own SALON_SLUG, not against the URL.
 app.use('/admin', adminRouter);
+app.use('/s/:slug/admin', adminRouter);
 
 // ── Inbound messages — called by whatsapp.js for every incoming chat message ─
 export async function handleIncoming(phone, { text, profileName }) {

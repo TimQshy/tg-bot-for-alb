@@ -1,0 +1,7 @@
+{
+  "clerkPublishableKey": "pk_test_replace_me",
+  "salons": [
+    { "slug": "arina", "name": "Салон Арина" },
+    { "slug": "demo", "name": "Демо-салон" }
+  ]
+}

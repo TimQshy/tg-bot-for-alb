@@ -1,38 +1,45 @@
-// Signed-cookie session for the single admin account. No session store needed:
-// the cookie itself carries an expiry + HMAC signature, verified on each request.
-import crypto from 'crypto';
+// Clerk-backed auth for the admin panel. The panel is served from a single
+// origin (admin.<domain>) and nginx proxies each salon under /s/<slug>/, so
+// every container authorizes against its own SALON_SLUG: a salon owner's
+// token carries the slugs they own, a system admin's carries the role.
+//
+// `metadata` is not in Clerk's session token by default — it has to be added
+// in Dashboard → Sessions → Customize session token as:
+//   { "metadata": "{{user.public_metadata}}" }
+import { createClerkClient, verifyToken } from '@clerk/backend';
 
-export const COOKIE_NAME = 'admin_session';
-const TTL_MS = 12 * 60 * 60 * 1000; // 12h
-
-function sign(value) {
-  return crypto.createHmac('sha256', process.env.ADMIN_COOKIE_SECRET).update(value).digest('hex');
+// Built on first use, not at import time, so a missing key still surfaces as
+// bot.js's readable "Missing required .env vars" instead of an import crash.
+let client = null;
+export function clerk() {
+  if (!client) client = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+  return client;
 }
 
-export function createSessionCookieValue() {
-  const expiry = String(Date.now() + TTL_MS);
-  return `${expiry}.${sign(expiry)}`;
+function bearerToken(authHeader) {
+  const prefix = 'Bearer ';
+  if (!authHeader || !authHeader.startsWith(prefix)) return null;
+  return authHeader.slice(prefix.length).trim() || null;
 }
 
-export function verifySessionCookieValue(raw) {
-  if (!raw) return false;
-  const dot = raw.lastIndexOf('.');
-  if (dot === -1) return false;
-  const expiry = raw.slice(0, dot);
-  const sig = raw.slice(dot + 1);
-  const expected = sign(expiry);
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
-  return Number(expiry) > Date.now();
-}
+// Resolves to { userId, isSystemAdmin } when the token is valid and grants
+// access to this container's salon, or null when it doesn't.
+export async function authorizeAdmin(authHeader) {
+  const token = bearerToken(authHeader);
+  if (!token) return null;
 
-export function parseCookies(header) {
-  const out = {};
-  (header || '').split(';').forEach(part => {
-    const idx = part.indexOf('=');
-    if (idx === -1) return;
-    out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
-  });
-  return out;
+  let claims;
+  try {
+    claims = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
+  } catch {
+    return null;
+  }
+
+  const metadata = claims.metadata || {};
+  const isSystemAdmin = metadata.role === 'system_admin';
+  const salons = Array.isArray(metadata.salons) ? metadata.salons : [];
+
+  if (!isSystemAdmin && !salons.includes(process.env.SALON_SLUG)) return null;
+
+  return { userId: claims.sub, isSystemAdmin };
 }

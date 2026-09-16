@@ -10,6 +10,7 @@
     "analyze-chats": "node src/scripts/analyzeChats.js"
   },
   "dependencies": {
+    "@clerk/backend": "^3.18.1",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "dotenv": "^16.4.1",
     "express": "^4.19.2",

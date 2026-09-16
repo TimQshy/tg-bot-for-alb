@@ -5,69 +5,132 @@ import { db } from './database.js';
 import { sendText, getWaStatus } from './whatsapp.js';
 import { formatDateFull, getTimeSlotsForMaster } from './utils.js';
 import * as waitlist from './waitlist.js';
-import { COOKIE_NAME, createSessionCookieValue, verifySessionCookieValue, parseCookies } from './adminAuth.js';
+import { authorizeAdmin, clerk } from './adminAuth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 export const adminRouter = express.Router();
 
-function setCookie(res, value, maxAgeMs) {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  res.setHeader('Set-Cookie', `${COOKIE_NAME}=${value}; HttpOnly; Path=/; Max-Age=${Math.floor(maxAgeMs / 1000)}; SameSite=Lax${secure}`);
+async function requireAuth(req, res, next) {
+  const auth = await authorizeAdmin(req.headers.authorization);
+  if (!auth) return res.status(401).json({ error: 'unauthorized' });
+  req.admin = auth;
+  next();
 }
 
-function requireAuth(req, res, next) {
-  const cookies = parseCookies(req.headers.cookie);
-  if (verifySessionCookieValue(cookies[COOKIE_NAME])) return next();
-  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'unauthorized' });
-  return res.redirect('/admin/login');
-}
-
-adminRouter.get('/login', (_req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'admin-login.html'));
-});
-
-adminRouter.post('/login', (req, res) => {
-  const { password } = req.body || {};
-  if (password !== process.env.ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'wrong_password' });
-  }
-  setCookie(res, createSessionCookieValue(), 12 * 60 * 60 * 1000);
-  res.json({ ok: true });
-});
-
-adminRouter.post('/logout', (_req, res) => {
-  setCookie(res, '', 0);
-  res.json({ ok: true });
-});
-
-adminRouter.use(requireAuth);
-
+// The dashboard shell carries no salon data — Clerk gates the UI in the
+// browser and requireAuth gates every /api route below, so serving the
+// markup itself unauthenticated is what lets the page sign the user in.
 adminRouter.get('/', (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'admin-dashboard.html'));
 });
 
+adminRouter.use('/api', requireAuth);
+
 // ── WhatsApp linked-device pairing (Baileys) ────────────────────────────
-adminRouter.get('/wa-status', (_req, res) => {
-  res.json({ status: getWaStatus().status });
+// System admins only. Linking the number is an onboarding step we run for
+// the salon, and the QR is dangerous in the wrong hands twice over: whoever
+// scans it links *their* WhatsApp as the salon's bot, and a salon owner
+// re-linking their own device silently kills the existing session.
+function requireSystemAdmin(req, res, next) {
+  if (!req.admin.isSystemAdmin) return res.status(403).json({ error: 'forbidden' });
+  next();
+}
+
+adminRouter.get('/api/wa-status', requireSystemAdmin, (_req, res) => {
+  const { status, qrDataUrl } = getWaStatus();
+  res.json({ salon: process.env.SALON_SLUG, status, qrDataUrl });
 });
 
-adminRouter.get('/wa-qr', (_req, res) => {
-  const { status, qrDataUrl } = getWaStatus();
-  res.type('html');
-  if (status === 'open') {
-    return res.send('<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;text-align:center;margin-top:80px"><h1>✅ WhatsApp подключён</h1></body>');
+// ── Access control (Clerk) ───────────────────────────────────────────────
+// Instance-wide, not per salon — any container can serve it, they all hold
+// the same CLERK_SECRET_KEY. Access is granted through public metadata:
+// { role: 'system_admin' } or { salons: [...] }.
+function describeAccess(metadata) {
+  const meta = metadata || {};
+  if (meta.role === 'system_admin') return { role: 'system_admin', salons: [] };
+  return { role: 'salon_owner', salons: Array.isArray(meta.salons) ? meta.salons : [] };
+}
+
+adminRouter.get('/api/access', requireSystemAdmin, async (_req, res) => {
+  const [users, invitations] = await Promise.all([
+    clerk().users.getUserList({ limit: 100 }),
+    clerk().invitations.getInvitationList({ status: 'pending', limit: 100 }),
+  ]);
+
+  res.json({
+    users: users.data.map(u => ({
+      id: u.id,
+      email: u.primaryEmailAddress?.emailAddress || u.emailAddresses[0]?.emailAddress || null,
+      ...describeAccess(u.publicMetadata),
+    })),
+    invitations: invitations.data.map(i => ({
+      id: i.id,
+      email: i.emailAddress,
+      ...describeAccess(i.publicMetadata),
+    })),
+  });
+});
+
+adminRouter.post('/api/access/invitations', requireSystemAdmin, async (req, res) => {
+  const { email, role, salons } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'missing_email' });
+
+  const publicMetadata = role === 'system_admin'
+    ? { role: 'system_admin' }
+    : { salons: Array.isArray(salons) ? salons : [] };
+
+  if (publicMetadata.salons && !publicMetadata.salons.length) {
+    return res.status(400).json({ error: 'missing_salon' });
   }
-  if (!qrDataUrl) {
-    return res.send('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="5"><body style="font-family:sans-serif;text-align:center;margin-top:80px"><h1>⏳ Генерируем QR…</h1></body>');
+
+  try {
+    const inv = await clerk().invitations.createInvitation({
+      emailAddress: email,
+      publicMetadata,
+      ignoreExisting: false,
+    });
+    res.json({ id: inv.id, email: inv.emailAddress });
+  } catch (err) {
+    // Clerk rejects duplicates and addresses that already have an account —
+    // both are things the admin should see verbatim rather than "failed".
+    const detail = err?.errors?.[0];
+    res.status(400).json({ error: detail?.code || 'invitation_failed', message: detail?.longMessage || detail?.message });
   }
-  res.send(`<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="20">
-<body style="font-family:sans-serif;text-align:center;margin-top:40px">
-<h1>Отсканируйте в WhatsApp</h1>
-<p>Настройки → Связанные устройства → Привязать устройство</p>
-<img src="${qrDataUrl}" style="width:300px;height:300px">
-</body>`);
+});
+
+// Sign-up is open, so people register themselves and land with no access at
+// all — this is where they get pointed at a salon.
+adminRouter.patch('/api/access/users/:id', requireSystemAdmin, async (req, res) => {
+  if (req.params.id === req.admin.userId) {
+    return res.status(400).json({ error: 'cannot_change_self', message: 'Свои права менять нельзя — так можно закрыть себе вход в панель' });
+  }
+
+  const { role, salons } = req.body || {};
+  // Clerk merges metadata key by key, so the key we are not setting has to
+  // be nulled explicitly or the old value survives.
+  const publicMetadata = role === 'system_admin'
+    ? { role: 'system_admin', salons: null }
+    : { role: null, salons: Array.isArray(salons) ? salons : [] };
+
+  try {
+    await clerk().users.updateUserMetadata(req.params.id, { publicMetadata });
+    res.json({ ok: true });
+  } catch (err) {
+    const detail = err?.errors?.[0];
+    res.status(400).json({ error: detail?.code || 'update_failed', message: detail?.longMessage || detail?.message });
+  }
+});
+
+adminRouter.post('/api/access/invitations/:id/revoke', requireSystemAdmin, async (req, res) => {
+  try {
+    await clerk().invitations.revokeInvitation(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    const detail = err?.errors?.[0];
+    res.status(400).json({ error: detail?.code || 'revoke_failed', message: detail?.longMessage || detail?.message });
+  }
 });
 
 // ── Appointments ─────────────────────────────────────────────────────────
