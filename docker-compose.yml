@@ -1,0 +1,62 @@
+# One VPS, one Postgres, one container per salon. Adding a salon is a new
+# env file + a service here + a location in nginx/admin.conf + an entry in
+# public/config.json — no schema changes (see MULTI_SALON_PLAN.md, Фаза 1).
+
+x-salon: &salon
+  build: .
+  image: salon-bot:latest
+  restart: unless-stopped
+  depends_on: [postgres]
+  mem_limit: 400m
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${PG_ROOT_PASSWORD:?set PG_ROOT_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Deliberately no `ports:` — Postgres is reachable only on the compose
+    # network, never from the internet.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  salon-arina:
+    <<: *salon
+    env_file: ./env/arina.env
+
+  salon-demo:
+    <<: *salon
+    env_file: ./env/demo.env
+
+  # scripts/new-salon.sh inserts above this line — keep it.
+  # >>> salons >>>
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d:ro
+      - ./public:/srv/admin:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+    depends_on: [salon-arina]
+
+  certbot:
+    image: certbot/certbot
+    restart: unless-stopped
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    # Renew twice a day; nginx picks up new certs on reload (see scripts/).
+    entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'
+
+volumes:
+  pgdata:
