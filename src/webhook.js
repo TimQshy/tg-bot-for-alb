@@ -15,7 +15,8 @@ import { runAgent, agentEnabled, clearHistory } from './aiAgent.js';
 
 const GREETING_WORDS = ['старт', 'start', 'меню', 'menu', 'привет', 'hi', 'hello'];
 // How long the bot keeps quiet in a chat after a human answered there.
-const TAKEOVER_MINUTES = Number(process.env.HUMAN_TAKEOVER_MINUTES || 180);
+// Counted from the admin's last manual message, not their first.
+const TAKEOVER_MINUTES = Number(process.env.HUMAN_TAKEOVER_MINUTES || 20);
 // Typed by the admin in the client's chat to hand the conversation back
 // early. The client sees it too, so keep it something innocuous-looking.
 const RESUME_COMMAND = '#bot';
