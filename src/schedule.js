@@ -85,6 +85,7 @@ export function computeSlots({
   booked = [],
   bufferMin = 0,
   minStartMin = 0,
+  maxStartMin = Infinity,
 }) {
   if (!durationMin || durationMin <= 0) return [];
   const step = stepMin > 0 ? stepMin : DEFAULT_STEP_MIN;
@@ -103,6 +104,11 @@ export function computeSlots({
     for (let s = ivStart; s + durationMin <= ivEnd; s += step) {
       const e = s + durationMin;
       if (s < minStartMin) continue; // already past, or inside the lead time
+      // Outside the window the service may start in at all — a five-hour
+      // colouring booked at 16:00 would run past closing even though the
+      // interval technically has room. Not listed as busy: it was never on
+      // offer.
+      if (s > maxStartMin) continue;
 
       const hitBreak = breaks.find(b => overlaps(s, e, b.start, b.end));
       if (hitBreak) {
@@ -151,11 +157,15 @@ export async function getFreeSlots(masterId, dateStr, serviceDurationMin, opts =
     minLeadMin = MIN_LEAD_MIN,
     excludeApptId = null,
     includeBusy = false,
+    earliestStart = null,
+    latestStart = null,
+    blocksDay = false,
   } = opts;
 
   const day = await getDaySchedule(masterId, dateStr);
   if (!day.isWorking || !day.intervals.length) return [];
 
+  const leadMin = dateStr === todayStr() ? nowMinutes() + minLeadMin : 0;
   const booked = await db.getBookedSlots(masterId, dateStr, excludeApptId);
   const slots = computeSlots({
     intervals: day.intervals,
@@ -163,10 +173,39 @@ export async function getFreeSlots(masterId, dateStr, serviceDurationMin, opts =
     stepMin,
     booked,
     bufferMin,
-    minStartMin: dateStr === todayStr() ? nowMinutes() + minLeadMin : 0,
+    minStartMin: Math.max(leadMin, earliestStart ? toMinutes(earliestStart) : 0),
+    maxStartMin: latestStart ? toMinutes(latestStart) : Infinity,
   });
 
+  // A day-long service takes the master out for the whole date, in both
+  // directions: nothing else can be booked on a day one of them sits on, and
+  // one of them can't be booked onto a day that already has anything.
+  const [dayBlocked, dayTaken] = await Promise.all([
+    db.hasDayBlockingAppointmentOn(masterId, dateStr, excludeApptId),
+    blocksDay ? db.hasAppointmentsOn(masterId, dateStr, excludeApptId) : Promise.resolve(false),
+  ]);
+  if (dayBlocked || dayTaken) {
+    return includeBusy ? slots.map(s => (s.status === 'free' ? { ...s, status: 'busy' } : s)) : [];
+  }
+
   return includeBusy ? slots : slots.filter(s => s.status === 'free');
+}
+
+// The same call from a service row, so no caller has to remember that the
+// window and the day block live on the service and not on the master.
+export function serviceSlotOpts(service, extra = {}) {
+  const time = v => (v ? String(v).slice(0, 5) : null);
+  return {
+    stepMin: service?.slot_step_minutes || DEFAULT_STEP_MIN,
+    earliestStart: time(service?.earliest_start),
+    latestStart: time(service?.latest_start),
+    blocksDay: !!service?.blocks_day,
+    ...extra,
+  };
+}
+
+export function getFreeSlotsForService(service, masterId, dateStr, extra = {}) {
+  return getFreeSlots(masterId, dateStr, service.duration_minutes, serviceSlotOpts(service, extra));
 }
 
 // Same computation as getFreeSlots, but over intervals the salon has typed
@@ -221,13 +260,18 @@ export async function findConflicts(masterId, dateStr, intervals) {
 // Dates in the next `days` days on which the master works at all. Used by the
 // WhatsApp flow before it asks for a time, so a day off — template or
 // override — never makes the list.
-export async function getAvailableDates(masterId, days = 14) {
+export async function getAvailableDates(masterId, days = 14, { service = null, limit = Infinity } = {}) {
   const dates = [];
   const today = todayStr();
-  for (let i = 1; i <= days; i++) {
+  for (let i = 1; i <= days && dates.length < limit; i++) {
     const date = addDays(today, i);
     const day = await getDaySchedule(masterId, date);
-    if (day.isWorking && day.intervals.length) dates.push(date);
+    if (!day.isWorking || !day.intervals.length) continue;
+    // With a service in hand the date has to actually hold it: a morning-only
+    // colouring, or a day already taken by one, must not be offered and then
+    // turn out to have nothing on it.
+    if (service && !(await getFreeSlotsForService(service, masterId, date)).length) continue;
+    dates.push(date);
   }
   return dates;
 }

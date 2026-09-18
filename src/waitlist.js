@@ -6,7 +6,7 @@ import { sendText } from './whatsapp.js';
 import { sendMenu } from './menu.js';
 import { getSession, clearSession } from './session.js';
 import { formatDateFull } from './utils.js';
-import { getFreeSlots } from './schedule.js';
+import { getFreeSlotsForService } from './schedule.js';
 import { sendMainMenu } from './booking.js';
 
 const ADMIN_PHONES = () => (process.env.ADMIN_PHONES || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -37,9 +37,10 @@ export async function notifyNext(masterId, date) {
   const entry = await db.getNextWaiting(masterId, date);
   if (!entry) return;
 
-  const slots = await getFreeSlots(masterId, date, entry.duration_minutes, {
-    stepMin: entry.slot_step_minutes,
-  });
+  // entry carries the service's duration, step, start window and day block
+  // (see db.getNextWaiting), so an offer never breaks a rule the booking
+  // flow would have enforced.
+  const slots = await getFreeSlotsForService(entry, masterId, date);
   if (!slots.length) return; // freed gap doesn't fit this service's duration yet
 
   const slot = slots[0];

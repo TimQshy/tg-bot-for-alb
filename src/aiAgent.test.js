@@ -69,7 +69,7 @@ mock.module('./database.js', {
 
 mock.module('./schedule.js', {
   namedExports: {
-    getFreeSlots: async (_masterId, _date, _dur, opts = {}) =>
+    getFreeSlotsForService: async (_service, _masterId, _date, opts = {}) =>
       opts.includeBusy ? SLOTS : SLOTS.filter(s => s.status === 'free'),
   },
 });

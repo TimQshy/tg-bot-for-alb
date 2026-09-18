@@ -9,7 +9,7 @@
 // the menu flow and in the admin panel.
 import { db } from './database.js';
 import { chat } from './ai.js';
-import { getFreeSlots } from './schedule.js';
+import { getFreeSlotsForService } from './schedule.js';
 import {
   createAppointmentFor,
   cancelAppointmentFor,
@@ -86,9 +86,20 @@ async function buildSystemPrompt(phone) {
   const serviceLines = [];
   for (const s of services) {
     const who = await db.getMastersForService(s.id);
+    // Spelled out so the agent can explain a refusal ("только до 12:30")
+    // instead of just reporting an empty list of times.
+    const limits = [];
+    const from = s.earliest_start ? String(s.earliest_start).slice(0, 5) : null;
+    const till = s.latest_start ? String(s.latest_start).slice(0, 5) : null;
+    if (from || till) {
+      limits.push(`начало записи ${from ? `не раньше ${from}` : ''}${from && till ? ', ' : ''}${till ? `не позже ${till}` : ''}`);
+    }
+    if (s.blocks_day) limits.push('занимает весь день мастера — в этот день к нему больше никого не записать');
+
     serviceLines.push(
       `- id=${s.id} | ${s.name} | от ${formatPrice(s.price)} | ${s.duration_minutes} мин | ` +
-        `мастера: ${who.map(m => `${m.name} (id=${m.id})`).join(', ') || 'нет'}`
+        `мастера: ${who.map(m => `${m.name} (id=${m.id})`).join(', ') || 'нет'}` +
+        (limits.length ? ` | ${limits.join('; ')}` : '')
     );
   }
 
@@ -133,6 +144,7 @@ async function buildSystemPrompt(phone) {
 6. Если клиент не знает имени, спроси его имя ДО записи и передай в create_booking параметром client_name${knownName ? ' (сейчас клиент записан как «' + knownName + '» — переспрашивать не надо)' : ''}.
 7. Вопросы не про салон (услуги, цены, мастера, запись) — вежливо скажи, что помогаешь только с этим.
 8. Работаешь с датами не дальше чем на ${HORIZON_DAYS} дней вперёд. Прошедшие даты не предлагай.
+9. У некоторых услуг есть ограничения (окно начала, занятость мастера на весь день) — они указаны в списке услуг. Если клиент просит время вне окна, объясни правило простыми словами («сложное окрашивание длится долго, поэтому начинаем только утром») и предложи подходящие варианты из check_availability.
 
 КАЛЕНДАРЬ (сегодня ${todayStr()})
 ${calendarText()}
@@ -247,11 +259,7 @@ const TOOLS = [
 const isPastDate = date => date < todayStr();
 
 async function slotsFor(masterId, date, service, { includeBusy = false, excludeApptId = null } = {}) {
-  return getFreeSlots(masterId, date, service.duration_minutes, {
-    stepMin: service.slot_step_minutes,
-    includeBusy,
-    excludeApptId,
-  });
+  return getFreeSlotsForService(service, masterId, date, { includeBusy, excludeApptId });
 }
 
 async function mastersFor(service, masterId) {

@@ -3,7 +3,7 @@ import { sendText } from './whatsapp.js';
 import { sendMenu } from './menu.js';
 import { getSession, setSession, clearSession } from './session.js';
 import { formatDateShort, formatDateFull, formatPrice } from './utils.js';
-import { getAvailableDates, getFreeSlots } from './schedule.js';
+import { getAvailableDates, getFreeSlotsForService } from './schedule.js';
 import * as waitlist from './waitlist.js';
 
 const SLOTS_PAGE_SIZE = 9;
@@ -55,6 +55,7 @@ export async function chooseService(phone, serviceIdStr) {
   setSession(phone, {
     step: 'choose_master',
     serviceId,
+    service,
     serviceName: service.name,
     serviceDuration: service.duration_minutes,
     serviceStep: service.slot_step_minutes,
@@ -82,7 +83,13 @@ export async function chooseMaster(phone, masterIdStr) {
   const master = await db.getMaster(masterId);
   if (!master) return start(phone);
 
-  const dates = (await getAvailableDates(masterId, 30)).slice(0, MENU_PAGE_SIZE);
+  // The service is passed in so a date the colouring can't fit on — morning
+  // gone, or the day already taken by another day-long booking — never makes
+  // the list.
+  const dates = await getAvailableDates(masterId, 30, {
+    service: session.service,
+    limit: MENU_PAGE_SIZE,
+  });
   if (!dates.length) {
     clearSession(phone);
     return sendText(phone, `😔 У мастера «${master.name}» нет свободных дат в ближайшее время.`);
@@ -100,9 +107,7 @@ export async function chooseDate(phone, dateStr) {
   const session = getSession(phone);
   if (!session || session.step !== 'choose_date') return start(phone);
 
-  const slots = await getFreeSlots(session.masterId, dateStr, session.serviceDuration, {
-    stepMin: session.serviceStep,
-  });
+  const slots = await getFreeSlotsForService(session.service, session.masterId, dateStr);
   if (!slots.length) {
     setSession(phone, { ...session, step: 'waitlist_offer', date: dateStr });
     return sendMenu(
@@ -317,8 +322,14 @@ function notifyAdmins(text) {
 }
 
 export async function createAppointmentFor(phone, { serviceId, masterId, date, startTime, endTime }) {
-  const available = await db.isSlotAvailable(masterId, date, startTime, endTime);
-  if (!available) return null;
+  const service = await db.getService(serviceId);
+  if (!service) return null;
+
+  // Checked against the offered slots rather than against overlaps alone, so
+  // a start outside the service's window, or a day another day-long booking
+  // already owns, is refused here too — whoever the caller is.
+  const free = await getFreeSlotsForService(service, masterId, date);
+  if (!free.some(s => s.start === startTime && s.end === endTime)) return null;
 
   const appt = await db.createAppointment({
     userId: phone, masterId, serviceId, date, startTime, endTime,
@@ -361,8 +372,9 @@ export async function rescheduleAppointmentFor(phone, apptId, { date, startTime,
   const appt = await db.getAppointmentById(apptId);
   if (!appt || appt.status !== 'confirmed' || appt.user_id !== phone) return null;
 
-  const free = await db.isSlotAvailable(appt.master_id, date, startTime, endTime, apptId);
-  if (!free) return null;
+  const service = await db.getService(appt.service_id);
+  const free = await getFreeSlotsForService(service, appt.master_id, date, { excludeApptId: apptId });
+  if (!free.some(s => s.start === startTime && s.end === endTime)) return null;
 
   const oldDate = String(appt.appointment_date).slice(0, 10);
   await db.rescheduleAppointment(apptId, { date, startTime, endTime });

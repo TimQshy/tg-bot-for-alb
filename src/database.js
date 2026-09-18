@@ -97,6 +97,15 @@ CREATE INDEX IF NOT EXISTS idx_override_master_date ON schedule_override(master_
 -- haircut on a 30-minute step wastes 10 minutes of every gap.
 ALTER TABLE services ADD COLUMN IF NOT EXISTS slot_step_minutes INTEGER NOT NULL DEFAULT 30;
 
+-- Long services (сложное окрашивание) are only worth starting in the morning
+-- and take the master for the rest of the day: earliest_start/latest_start
+-- bound when the service may begin, blocks_day keeps every other booking off
+-- that master on a day one of these is booked. NULL/false = no restriction,
+-- which is what every existing service keeps.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS earliest_start TIME;
+ALTER TABLE services ADD COLUMN IF NOT EXISTS latest_start TIME;
+ALTER TABLE services ADD COLUMN IF NOT EXISTS blocks_day BOOLEAN NOT NULL DEFAULT false;
+
 -- Human takeover: while this is in the future the bot stays silent in that
 -- chat, so an admin answering the client by hand isn't talked over by the
 -- FSM. Set from whatsapp.js when an outgoing message appears that the bot
@@ -325,6 +334,34 @@ export const db = {
     return rows;
   },
 
+  // Does this master already have anything confirmed that day? A blocks_day
+  // service can't be squeezed in next to it.
+  async hasAppointmentsOn(masterId, date, excludeApptId = null) {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM appointments
+       WHERE master_id=$1 AND appointment_date=$2 AND status='confirmed'
+         AND ($3::int IS NULL OR id<>$3)
+       LIMIT 1`,
+      [masterId, date, excludeApptId]
+    );
+    return rows.length > 0;
+  },
+
+  // …and the other direction: a blocks_day appointment already sitting there
+  // closes the whole day for everyone else.
+  async hasDayBlockingAppointmentOn(masterId, date, excludeApptId = null) {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM appointments a
+       JOIN services s ON s.id = a.service_id
+       WHERE a.master_id=$1 AND a.appointment_date=$2 AND a.status='confirmed'
+         AND s.blocks_day = true
+         AND ($3::int IS NULL OR a.id<>$3)
+       LIMIT 1`,
+      [masterId, date, excludeApptId]
+    );
+    return rows.length > 0;
+  },
+
   async isSlotAvailable(masterId, date, startTime, endTime, excludeApptId = null) {
     const { rows } = await pool.query(
       `SELECT COUNT(*) FROM appointments
@@ -468,22 +505,32 @@ export const db = {
     return rows;
   },
 
-  async createService({ name, description, durationMinutes, slotStepMinutes, price }) {
+  async createService({
+    name, description, durationMinutes, slotStepMinutes, price,
+    earliestStart = null, latestStart = null, blocksDay = false,
+  }) {
     const { rows } = await pool.query(
-      `INSERT INTO services (name, description, duration_minutes, slot_step_minutes, price)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [name, description || null, durationMinutes, slotStepMinutes || 30, price]
+      `INSERT INTO services
+         (name, description, duration_minutes, slot_step_minutes, price,
+          earliest_start, latest_start, blocks_day)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [name, description || null, durationMinutes, slotStepMinutes || 30, price,
+       earliestStart || null, latestStart || null, !!blocksDay]
     );
     return rows[0];
   },
 
-  async updateService(id, { name, description, durationMinutes, slotStepMinutes, price, isActive }) {
+  async updateService(id, {
+    name, description, durationMinutes, slotStepMinutes, price, isActive,
+    earliestStart = null, latestStart = null, blocksDay = false,
+  }) {
     const { rows } = await pool.query(
       `UPDATE services
          SET name=$2, description=$3, duration_minutes=$4, slot_step_minutes=$5,
-             price=$6, is_active=$7
+             price=$6, is_active=$7, earliest_start=$8, latest_start=$9, blocks_day=$10
        WHERE id=$1 RETURNING *`,
-      [id, name, description || null, durationMinutes, slotStepMinutes || 30, price, isActive]
+      [id, name, description || null, durationMinutes, slotStepMinutes || 30, price, isActive,
+       earliestStart || null, latestStart || null, !!blocksDay]
     );
     return rows[0];
   },
@@ -603,7 +650,8 @@ export const db = {
   // Oldest still-waiting entry for this master/date (FIFO).
   async getNextWaiting(masterId, date) {
     const { rows } = await pool.query(
-      `SELECT w.*, s.duration_minutes, s.slot_step_minutes
+      `SELECT w.*, s.duration_minutes, s.slot_step_minutes,
+              s.earliest_start, s.latest_start, s.blocks_day
        FROM waitlist w
        JOIN services s ON s.id = w.service_id
        WHERE w.master_id=$1 AND w.desired_date=$2 AND w.status='waiting'

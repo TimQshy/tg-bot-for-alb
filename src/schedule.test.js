@@ -9,7 +9,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { db } from './database.js';
-import { computeSlots, getDaySchedule, getFreeSlots, validateIntervals } from './schedule.js';
+import {
+  computeSlots, getDaySchedule, getFreeSlots, getFreeSlotsForService, validateIntervals,
+} from './schedule.js';
 
 const SATURDAY = '2026-09-19'; // a Saturday, weekday 5
 const NEXT_SATURDAY = '2026-09-26';
@@ -163,4 +165,76 @@ test('валидация отбивает кривые интервалы', () =
   ]);
   assert.equal(ok[0].from, '10:00', 'интервалы должны отсортироваться');
   assert.equal(ok[0].breaks[0].note, 'обед');
+});
+
+// ── Long services: a start window, and taking the master's whole day ───────
+// The case this exists for: сложное окрашивание runs for hours, so it may
+// only start in the morning, and on the day it is booked the master takes
+// nobody else.
+test('окно начала обрезает поздние слоты', () => {
+  const slots = computeSlots({
+    intervals: [{ from: '09:00', to: '19:00', breaks: [] }],
+    durationMin: 60, stepMin: 60,
+    minStartMin: 10 * 60,   // не раньше 10:00
+    maxStartMin: 12.5 * 60, // не позже 12:30
+  });
+  assert.deepEqual(starts(slots), ['10:00', '11:00', '12:00']);
+});
+
+test('услуга с окном и блокировкой дня забирает у мастера весь день', async (t) => {
+  const long = await db.createService({
+    name: 'Тест-окрашивание', durationMinutes: 120, slotStepMinutes: 60, price: 7000,
+    earliestStart: '09:00', latestStart: '12:30', blocksDay: true,
+  });
+  t.after(async () => {
+    await db.updateService(long.id, {
+      name: 'Тест-окрашивание', durationMinutes: 120, slotStepMinutes: 60, price: 7000, isActive: false,
+    });
+  });
+
+  await db.upsertOverride(masterId, NEXT_SATURDAY, 'custom', hours('09:00', '19:00'));
+
+  // Начало ограничено окном: 13:00 и позже уже не предлагаются, хотя день
+  // работает до 19:00.
+  const offered = await getFreeSlotsForService(long, masterId, NEXT_SATURDAY);
+  assert.deepEqual(starts(offered), ['09:00', '10:00', '11:00', '12:00']);
+
+  await db.upsertUser({ id: 'test-blocks-day', name: 'Тест-клиент' });
+  const appt = await db.createAppointment({
+    userId: 'test-blocks-day', masterId, serviceId: long.id,
+    date: NEXT_SATURDAY, startTime: '09:00', endTime: '11:00',
+  });
+  t.after(() => db.cancelAppointment(appt.id));
+
+  // Обычная услуга в этот день больше не записывается — ни в 17:00, куда
+  // окрашивание физически не дотягивается.
+  assert.deepEqual(await getFreeSlotsForService(service, masterId, NEXT_SATURDAY), []);
+  // …и сама длинная услуга на этот день тоже уже не встаёт.
+  assert.deepEqual(await getFreeSlotsForService(long, masterId, NEXT_SATURDAY), []);
+  // Соседняя дата не задета.
+  assert.ok((await getFreeSlotsForService(service, masterId, SATURDAY)).length > 0);
+});
+
+test('длинная услуга не встаёт на день, где уже есть обычная запись', async (t) => {
+  const long = await db.createService({
+    name: 'Тест-окрашивание-2', durationMinutes: 120, slotStepMinutes: 60, price: 7000,
+    earliestStart: '09:00', latestStart: '12:30', blocksDay: true,
+  });
+  t.after(async () => {
+    await db.updateService(long.id, {
+      name: 'Тест-окрашивание-2', durationMinutes: 120, slotStepMinutes: 60, price: 7000, isActive: false,
+    });
+  });
+
+  await db.upsertOverride(masterId, NEXT_SATURDAY, 'custom', hours('09:00', '19:00'));
+  await db.upsertUser({ id: 'test-blocks-day-2', name: 'Тест-клиент' });
+  const appt = await db.createAppointment({
+    userId: 'test-blocks-day-2', masterId, serviceId: service.id,
+    date: NEXT_SATURDAY, startTime: '17:00', endTime: '18:00',
+  });
+  t.after(() => db.cancelAppointment(appt.id));
+
+  assert.deepEqual(await getFreeSlotsForService(long, masterId, NEXT_SATURDAY), []);
+  // Обычная услуга в этот день по-прежнему записывается.
+  assert.ok((await getFreeSlotsForService(service, masterId, NEXT_SATURDAY)).length > 0);
 });

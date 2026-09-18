@@ -5,7 +5,8 @@ import { db } from './database.js';
 import { sendText, getWaStatus } from './whatsapp.js';
 import { formatDateFull, getDayOfWeek } from './utils.js';
 import {
-  DEFAULT_STEP_MIN, findConflicts, getDaySchedule, getFreeSlots, previewSlots, validateIntervals,
+  DEFAULT_STEP_MIN, findConflicts, getDaySchedule, getFreeSlots, previewSlots, serviceSlotOpts,
+  validateIntervals,
 } from './schedule.js';
 import * as waitlist from './waitlist.js';
 import { authorizeAdmin, clerk } from './adminAuth.js';
@@ -194,12 +195,24 @@ adminRouter.get('/api/services', async (_req, res) => {
   res.json(await db.getAllServices());
 });
 
+// earliest_start/latest_start/blocks_day are the long-service rules: an empty
+// string from the form means "no limit", which is NULL in the column.
+function startWindow(body) {
+  const time = v => (typeof v === 'string' && /^\d{2}:\d{2}/.test(v) ? v.slice(0, 5) : null);
+  return {
+    earliestStart: time(body.earliest_start),
+    latestStart: time(body.latest_start),
+    blocksDay: body.blocks_day === true,
+  };
+}
+
 adminRouter.post('/api/services', async (req, res) => {
   const { name, description, duration_minutes, slot_step_minutes, price } = req.body || {};
   if (!name || !duration_minutes || price == null) return res.status(400).json({ error: 'missing_fields' });
   res.json(await db.createService({
     name, description, durationMinutes: duration_minutes,
     slotStepMinutes: slot_step_minutes, price,
+    ...startWindow(req.body || {}),
   }));
 });
 
@@ -230,6 +243,7 @@ adminRouter.put('/api/services/:id', async (req, res) => {
       slotStepMinutes: slot_step_minutes,
       price,
       isActive: is_active !== false,
+      ...startWindow(req.body || {}),
     })
   );
 });
@@ -342,10 +356,7 @@ adminRouter.get('/api/schedule/day', async (req, res) => {
   const durationMin = service?.duration_minutes || 60;
 
   const [slots, conflicts] = await Promise.all([
-    getFreeSlots(id, date, durationMin, {
-      stepMin: service?.slot_step_minutes || DEFAULT_STEP_MIN,
-      includeBusy: true,
-    }),
+    getFreeSlots(id, date, durationMin, serviceSlotOpts(service, { includeBusy: true })),
     findConflicts(id, date, day.intervals),
   ]);
 
@@ -428,16 +439,20 @@ adminRouter.put('/api/services/:id/masters', async (req, res) => {
 
 // ── Available slots (reschedule sheet + new-appointment sheet) ───────────
 adminRouter.get('/api/available-slots', async (req, res) => {
-  const { masterId, date, durationMinutes, stepMinutes, excludeApptId } = req.query;
+  const { masterId, date, durationMinutes, stepMinutes, excludeApptId, serviceId } = req.query;
   if (!masterId || !date || !durationMinutes) return res.status(400).json({ error: 'missing_fields' });
+
+  // With serviceId the service's own rules apply, exactly as they do in
+  // WhatsApp; without it the panel still gets the plain duration-based list.
+  const service = serviceId ? await db.getService(parseInt(serviceId, 10)) : null;
   const slots = await getFreeSlots(
     parseInt(masterId, 10),
     date,
     parseInt(durationMinutes, 10),
-    {
+    serviceSlotOpts(service, {
       stepMin: stepMinutes ? parseInt(stepMinutes, 10) : DEFAULT_STEP_MIN,
       excludeApptId: excludeApptId ? parseInt(excludeApptId, 10) : null,
-    }
+    })
   );
   res.json(slots);
 });

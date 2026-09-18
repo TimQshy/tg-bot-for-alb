@@ -525,6 +525,16 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       </select>
       <p class="hint">Как часто может начинаться запись. Не то же самое, что длительность.</p>
     </div>
+    <div class="grid2">
+      <label class="field"><span class="field__label">Начинать не раньше</span><input class="input" id="svcFrom" type="time"></label>
+      <label class="field"><span class="field__label">Начинать не позже</span><input class="input" id="svcTill" type="time"></label>
+    </div>
+    <p class="hint" style="margin-top:-6px">Для долгих услуг: сложное окрашивание берут только утром. Пусто — без ограничения.</p>
+    <label style="display:flex;align-items:center;gap:8px;margin:14px 0">
+      <button class="switch" role="switch" id="svcBlocksDay" aria-checked="false"></button>
+      <span class="field__label" style="margin:0">Занимает весь день мастера</span>
+    </label>
+    <p class="hint" style="margin-top:-8px">В день такой записи мастеру больше никого не запишут — ни бот, ни лист ожидания.</p>
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <button class="switch" role="switch" id="svcActive" aria-checked="true"></button>
       <span class="field__label" style="margin:0">Активна (видна в записи через WhatsApp)</span>
@@ -1310,7 +1320,7 @@ async function refreshNewSlots() {
   const date = document.getElementById('newDate').value;
   if (!serviceId || !masterId || !date) { grid.innerHTML = ''; hint.textContent = ''; return; }
   const service = state.services.find(s => s.id === serviceId);
-  const slots = await api(`/api/available-slots?masterId=${masterId}&date=${date}&durationMinutes=${service.duration_minutes}&stepMinutes=${service.slot_step_minutes || 30}`);
+  const slots = await api(`/api/available-slots?masterId=${masterId}&date=${date}&durationMinutes=${service.duration_minutes}&stepMinutes=${service.slot_step_minutes || 30}&serviceId=${service.id}`);
   grid.innerHTML = slots.map(s => `<button class="slot" data-start="${s.start}" data-end="${s.end}">${s.start}</button>`).join('');
   hint.textContent = slots.length ? '' : 'Нет свободных слотов на эту дату';
 }
@@ -1348,6 +1358,7 @@ async function openMoveSheet(apptId) {
     masterId: appt.master_id,
     durationMin: toMin(appt.end_time) - toMin(appt.start_time),
     stepMin: (state.services.find(s => s.id === appt.service_id) || {}).slot_step_minutes || 30,
+    serviceId: appt.service_id,
     slot: null,
   };
   document.getElementById('moveCtx').innerHTML =
@@ -1367,8 +1378,8 @@ async function refreshMoveSlots() {
   document.getElementById('moveSubmitBtn').disabled = true;
   const date = document.getElementById('moveDate').value;
   if (!date) return;
-  const { masterId, durationMin, stepMin, apptId } = state.move;
-  const slots = await api(`/api/available-slots?masterId=${masterId}&date=${date}&durationMinutes=${durationMin}&stepMinutes=${stepMin}&excludeApptId=${apptId}`);
+  const { masterId, durationMin, stepMin, apptId, serviceId } = state.move;
+  const slots = await api(`/api/available-slots?masterId=${masterId}&date=${date}&durationMinutes=${durationMin}&stepMinutes=${stepMin}&excludeApptId=${apptId}&serviceId=${serviceId}`);
   grid.innerHTML = slots.map(s => `<button class="slot" data-start="${s.start}" data-end="${s.end}">${s.start}</button>`).join('');
   hint.textContent = slots.length ? '' : 'Нет свободных слотов на эту дату';
 }
@@ -1434,6 +1445,9 @@ async function openServiceSheet(id) {
     document.getElementById('svcStep').value = String(s.slot_step_minutes || 30);
     document.getElementById('svcPrice').value = Math.round(Number(s.price));
     document.getElementById('svcActive').setAttribute('aria-checked', String(!!s.is_active));
+    document.getElementById('svcFrom').value = (s.earliest_start || '').slice(0, 5);
+    document.getElementById('svcTill').value = (s.latest_start || '').slice(0, 5);
+    document.getElementById('svcBlocksDay').setAttribute('aria-checked', String(!!s.blocks_day));
     const assigned = await api(`/api/services/${id}/masters`);
     state.svc = { id, masterIds: assigned.map(m => m.id) };
     document.getElementById('svcDeleteBtn').hidden = false;
@@ -1444,6 +1458,9 @@ async function openServiceSheet(id) {
     document.getElementById('svcStep').value = '30';
     document.getElementById('svcPrice').value = '';
     document.getElementById('svcActive').setAttribute('aria-checked', 'true');
+    document.getElementById('svcFrom').value = '';
+    document.getElementById('svcTill').value = '';
+    document.getElementById('svcBlocksDay').setAttribute('aria-checked', 'false');
     state.svc = { id: null, masterIds: [] };
     document.getElementById('svcDeleteBtn').hidden = true;
   }
@@ -1453,6 +1470,9 @@ async function openServiceSheet(id) {
 }
 document.getElementById('addServiceBtn').addEventListener('click', () => openServiceSheet(null));
 document.getElementById('svcActive').addEventListener('click', function () {
+  this.setAttribute('aria-checked', String(this.getAttribute('aria-checked') !== 'true'));
+});
+document.getElementById('svcBlocksDay').addEventListener('click', function () {
   this.setAttribute('aria-checked', String(this.getAttribute('aria-checked') !== 'true'));
 });
 document.getElementById('svcMasterChips').addEventListener('click', e => {
@@ -1469,12 +1489,19 @@ document.getElementById('svcSubmitBtn').addEventListener('click', async () => {
   const slot_step_minutes = parseInt(document.getElementById('svcStep').value, 10);
   const price = parseFloat(document.getElementById('svcPrice').value);
   const is_active = document.getElementById('svcActive').getAttribute('aria-checked') === 'true';
+  const earliest_start = document.getElementById('svcFrom').value || null;
+  const latest_start = document.getElementById('svcTill').value || null;
+  const blocks_day = document.getElementById('svcBlocksDay').getAttribute('aria-checked') === 'true';
   const hint = document.getElementById('svcHint');
   if (!name || !duration_minutes || !(price >= 0)) { hint.textContent = 'Заполните название, длительность и цену'; return; }
+  if (earliest_start && latest_start && latest_start < earliest_start) {
+    hint.textContent = '«Не позже» должно быть после «не раньше»'; return;
+  }
+  const rules = { earliest_start, latest_start, blocks_day };
   try {
     let id = state.svc.id;
-    if (id) await api(`/api/services/${id}`, { method: 'PUT', body: JSON.stringify({ name, duration_minutes, slot_step_minutes, price, is_active }) });
-    else { const created = await api('/api/services', { method: 'POST', body: JSON.stringify({ name, duration_minutes, slot_step_minutes, price }) }); id = created.id; }
+    if (id) await api(`/api/services/${id}`, { method: 'PUT', body: JSON.stringify({ name, duration_minutes, slot_step_minutes, price, is_active, ...rules }) });
+    else { const created = await api('/api/services', { method: 'POST', body: JSON.stringify({ name, duration_minutes, slot_step_minutes, price, ...rules }) }); id = created.id; }
     await api(`/api/services/${id}/masters`, { method: 'PUT', body: JSON.stringify({ masterIds: state.svc.masterIds }) });
     closeSheet(); toast('Сохранено');
     loadServices();
@@ -1516,6 +1543,7 @@ async function deleteService(s) {
             body: JSON.stringify({
               name: s.name, duration_minutes: s.duration_minutes,
               slot_step_minutes: s.slot_step_minutes, price: s.price, is_active: false,
+              earliest_start: s.earliest_start, latest_start: s.latest_start, blocks_day: s.blocks_day,
             }),
           });
           closeSheet(); toast('Услуга скрыта');
