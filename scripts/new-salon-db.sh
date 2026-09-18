@@ -21,11 +21,13 @@ psql() { docker compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1 "$@
 exists() { [ "$(psql -tAc "$1")" = "1" ]; }
 
 # $DB is regex-checked above; the password is passed as a psql variable so it
-# is never interpolated into SQL text.
+# is never interpolated into SQL text. The statement goes in on stdin because
+# psql expands :'pw' only while reading input — with -c the colon reaches the
+# server verbatim and it fails with a syntax error at ":".
 if exists "SELECT 1 FROM pg_roles WHERE rolname = '$DB'"; then
   echo "role $DB already exists, leaving it alone"
 else
-  psql -v pw="$PASSWORD" -c "CREATE ROLE \"$DB\" LOGIN PASSWORD :'pw'"
+  printf '%s\n' "CREATE ROLE \"$DB\" LOGIN PASSWORD :'pw'" | psql -v pw="$PASSWORD"
 fi
 
 if exists "SELECT 1 FROM pg_database WHERE datname = '$DB'"; then
