@@ -7,6 +7,7 @@ import { db } from './database.js';
 import { sendText } from './whatsapp.js';
 import { formatDateFull } from './utils.js';
 import { expireStaleOffers } from './waitlist.js';
+import { refreshIgToken } from './instagram.js';
 
 const WAITLIST_OFFER_TIMEOUT_MIN = parseInt(process.env.WAITLIST_OFFER_TIMEOUT_MIN || '30', 10);
 
@@ -46,5 +47,12 @@ export function startScheduler() {
   cron.schedule('*/5 * * * *', () => {
     runReminders().catch(err => console.error('runReminders failed:', err));
     expireStaleOffers(WAITLIST_OFFER_TIMEOUT_MIN).catch(err => console.error('expireStaleOffers failed:', err));
+  });
+
+  // Instagram tokens live 60 days; refreshing on the 1st keeps a wide margin
+  // even if a run is missed. Pruning delivered-event ids rides along.
+  cron.schedule('0 4 1 * *', () => {
+    refreshIgToken().catch(err => console.error('refreshIgToken failed:', err));
+    db.pruneIgEvents().catch(err => console.error('pruneIgEvents failed:', err));
   });
 }

@@ -9,6 +9,7 @@ import { getSession, clearSession } from './session.js';
 import * as booking from './booking.js';
 import * as waitlist from './waitlist.js';
 import { adminRouter } from './admin.js';
+import { instagramRouter, instagramEnabled } from './instagram.js';
 import { askAI } from './ai.js';
 
 const GREETING_WORDS = ['старт', 'start', 'меню', 'menu', 'привет', 'hi', 'hello'];
@@ -16,9 +17,23 @@ const ADMIN_PHONES = () => (process.env.ADMIN_PHONES || '').split(',').map(s => 
 
 export const app = express();
 
-app.use(express.json());
+// rawBody is kept so instagram.js can check Meta's X-Hub-Signature-256,
+// which is computed over the exact bytes received.
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
 app.get('/', (_req, res) => res.send('OK'));
+
+// Instagram comment/DM auto-replies, mounted only for the salon that has
+// IG_VERIFY_TOKEN set. Behind nginx the public URL is
+// https://<domain>/s/<slug>/webhook/instagram — that is what goes into the
+// Meta app's Callback URL.
+if (instagramEnabled) {
+  app.use('/webhook/instagram', instagramRouter);
+  if (!process.env.IG_APP_SECRET) {
+    console.warn('IG_APP_SECRET is not set — incoming Instagram webhooks are not verified');
+  }
+  console.log('Instagram auto-replies enabled');
+}
 
 app.get('/privacy', (_req, res) => {
   res.type('html').send(`<!doctype html>

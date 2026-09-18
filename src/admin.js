@@ -211,6 +211,23 @@ adminRouter.put('/api/services/:id', async (req, res) => {
   );
 });
 
+// ── Instagram auto-replies ────────────────────────────────────────────────
+// The whole list is saved at once: order decides which keyword wins, so
+// editing rows one by one would need a separate reorder call anyway.
+adminRouter.get('/api/ig-replies', async (_req, res) => {
+  res.json(await db.getIgReplies());
+});
+
+adminRouter.put('/api/ig-replies', async (req, res) => {
+  const replies = Array.isArray(req.body?.replies) ? req.body.replies : null;
+  if (!replies) return res.status(400).json({ error: 'missing_fields' });
+  const cleaned = replies
+    .map(r => ({ keyword: String(r.keyword || '').trim(), reply: String(r.reply || '').trim() }))
+    .filter(r => r.keyword && r.reply);
+  await db.saveIgReplies(cleaned);
+  res.json(await db.getIgReplies());
+});
+
 // ── Masters (read-only, for dropdowns) ───────────────────────────────────
 adminRouter.get('/api/masters', async (_req, res) => {
   res.json(await db.getAllMasters());

@@ -116,6 +116,32 @@ CREATE TABLE IF NOT EXISTS wa_auth (
   data JSONB NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Instagram auto-replies: first row whose keyword occurs in the incoming
+-- text wins, so ordering matters. A keyword of '*' matches anything and is
+-- meant to sit last as the catch-all.
+CREATE TABLE IF NOT EXISTS ig_replies (
+  id SERIAL PRIMARY KEY,
+  keyword TEXT NOT NULL,
+  reply TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT true
+);
+
+-- Delivered webhook events, so Meta's retries don't answer the same comment
+-- twice. Ids are prefixed by kind ("c:<comment id>", "m:<message id>").
+CREATE TABLE IF NOT EXISTS ig_events (
+  id TEXT PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Long-lived Instagram tokens expire after 60 days and are refreshed in
+-- place, so they cannot live in the environment.
+CREATE TABLE IF NOT EXISTS ig_config (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 `;
 
 export const db = {
@@ -459,5 +485,59 @@ export const db = {
 
   async waAuthDelete(id) {
     await pool.query('DELETE FROM wa_auth WHERE id=$1', [id]);
+  },
+
+  // ── Instagram auto-replies (see src/instagram.js) ───────────────────────
+  async getIgReplies() {
+    const { rows } = await pool.query(
+      'SELECT * FROM ig_replies WHERE is_active=true ORDER BY position, id'
+    );
+    return rows;
+  },
+
+  async saveIgReplies(replies) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM ig_replies');
+      for (const [i, r] of replies.entries()) {
+        await client.query(
+          'INSERT INTO ig_replies (keyword, reply, position) VALUES ($1,$2,$3)',
+          [r.keyword, r.reply, i]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
+  // True the first time an event id is seen, false on Meta's retries.
+  async claimIgEvent(id) {
+    const { rowCount } = await pool.query(
+      'INSERT INTO ig_events (id) VALUES ($1) ON CONFLICT DO NOTHING',
+      [id]
+    );
+    return rowCount === 1;
+  },
+
+  async pruneIgEvents() {
+    await pool.query("DELETE FROM ig_events WHERE created_at < NOW() - interval '30 days'");
+  },
+
+  async getIgConfig(key) {
+    const { rows } = await pool.query('SELECT value FROM ig_config WHERE key=$1', [key]);
+    return rows[0]?.value || null;
+  },
+
+  async setIgConfig(key, value) {
+    await pool.query(
+      `INSERT INTO ig_config (key, value, updated_at) VALUES ($1,$2,NOW())
+       ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()`,
+      [key, value]
+    );
   },
 };
