@@ -1,0 +1,15 @@
+# The image only needs package*.json, src/ and public/ (see Dockerfile).
+# Everything else is either large, secret, or root-owned on the VPS — the
+# certbot volumes in particular, which the build user cannot read at all.
+.git/
+node_modules/
+certbot/
+env/
+gas/
+nginx/
+scripts/
+public/config.json
+.env
+.env.*
+*.log
+*.md
