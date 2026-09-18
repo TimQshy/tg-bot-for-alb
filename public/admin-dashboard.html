@@ -13,24 +13,25 @@
 <link rel="apple-touch-icon" href="/admin/icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Manrope:wght@700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <style>
 :root{
-  --ground:#F1F7F4; --surface:#FFFFFF; --surface-2:#E0EFE8;
-  --line:rgba(24,34,32,.1); --line-strong:rgba(24,34,32,.18);
-  --ink:#182220; --ink-2:rgba(24,34,32,.62); --ink-3:rgba(24,34,32,.42);
-  --accent:#1D6A4C; --accent-ink:#14543A; --accent-soft:#E3F1EA;
-  --ok:#1B6947; --ok-soft:#E2F0E7;
+  --ground:#EFF4F0; --surface:#FFFFFF; --surface-2:#E4EFE7;
+  --line:#E4EDE7; --line-strong:#CBDCD2;
+  --ink:#182220; --ink-2:#5A6A61; --ink-3:#8A9A91;
+  --accent:#14634A; --accent-ink:#0F4D39; --accent-soft:#E4EFE7;
+  --ok:#14634A; --ok-soft:#E4EFE7;
   --wait:#795708; --wait-soft:#F7EBD2;
-  --off:rgba(24,34,32,.5); --off-soft:#EDF3EF;
+  --off:#5A6A61; --off-soft:#EDF3EF;
   --warn:#A4552A; --warn-soft:#F6EDE5;
-  --r-card:16px; --r-sm:10px; --r-pill:999px;
-  --shadow-card:0 1px 2px rgba(24,34,32,.06), 0 1px 1px rgba(24,34,32,.04);
+  --r-card:20px; --r-sm:12px; --r-pill:999px;
+  --shadow-card:0 1px 2px rgba(24,34,32,.05), 0 1px 1px rgba(24,34,32,.03);
   --shadow-sheet:0 -8px 40px rgba(24,34,32,.16);
-  --shadow-fab:0 10px 26px rgba(29,106,76,.32);
+  --shadow-fab:0 10px 26px rgba(20,99,74,.28);
   --tap:44px; --bar-h:60px; --safe-b:env(safe-area-inset-bottom, 0px); --safe-t:env(safe-area-inset-top, 0px);
   --font-ui:'Onest', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-num:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-head:'Manrope', var(--font-ui);
+  --font-num:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -67,7 +68,7 @@ body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font-u
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;background:none;border:0}
 ol,ul{list-style:none;margin:0;padding:0}
-h1,h2,h3{margin:0;font-weight:600}
+h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.02em}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
 .num{font-family:var(--font-num);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .app{min-height:100dvh;display:grid;grid-template-columns:minmax(0,1fr)}
@@ -75,7 +76,7 @@ h1,h2,h3{margin:0;font-weight:600}
 .appbar{position:sticky;top:0;z-index:30;background:color-mix(in srgb, var(--ground) 88%, transparent);backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--line)}
 .appbar__in{max-width:560px;margin:0 auto;padding:calc(10px + var(--safe-t)) 16px 10px;display:flex;align-items:center;gap:12px}
 .brand{display:flex;align-items:baseline;gap:8px;min-width:0}
-.brand__name{font-size:17px;font-weight:600;letter-spacing:-.015em}
+.brand__name{font-family:var(--font-head);font-size:17px;font-weight:700;letter-spacing:-.02em}
 .brand__sub{font-size:12px;color:var(--ink-3);white-space:nowrap}
 .appbar__spacer{flex:1}
 .iconbtn{width:var(--tap);height:var(--tap);display:grid;place-items:center;border-radius:12px;color:var(--ink-2)}
@@ -103,7 +104,7 @@ h1,h2,h3{margin:0;font-weight:600}
   .access-pick{max-width:none;width:100%}
 }
 .screen-head{padding:18px 0 6px}
-.screen-head h1{font-size:26px;letter-spacing:-.03em}
+.screen-head h1{font-size:26px;font-weight:800;letter-spacing:-.03em}
 .screen-head p{margin:4px 0 0;color:var(--ink-2);font-size:13.5px}
 .days{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;margin:0 -16px;scroll-snap-type:x proximity;scrollbar-width:none}
 .days::-webkit-scrollbar{display:none}
@@ -200,7 +201,7 @@ h1,h2,h3{margin:0;font-weight:600}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;max-height:88dvh;display:flex;flex-direction:column;background:var(--surface);border-radius:22px 22px 0 0;box-shadow:var(--shadow-sheet);padding-bottom:var(--safe-b)}
 .sheet__grab{width:36px;height:4px;border-radius:2px;background:var(--line-strong);margin:8px auto 0;flex:0 0 auto}
 .sheet__head{display:flex;align-items:center;gap:10px;padding:12px 16px 10px;border-bottom:1px solid var(--line);flex:0 0 auto}
-.sheet__title{font-size:17px;font-weight:600;letter-spacing:-.015em;flex:1}
+.sheet__title{font-family:var(--font-head);font-size:17px;font-weight:700;letter-spacing:-.02em;flex:1}
 .sheet__body{padding:14px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .sheet__foot{padding:12px 16px 16px;border-top:1px solid var(--line);flex:0 0 auto;display:grid;grid-template-columns:1fr 1.4fr;gap:10px}
 @media (min-width:900px){.sheet{left:50%;transform:translateX(-50%);width:460px;bottom:24px;border-radius:22px}}
