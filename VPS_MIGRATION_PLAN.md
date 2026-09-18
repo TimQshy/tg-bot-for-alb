@@ -29,8 +29,8 @@
                     └──┬───────┬──┘
            /  и /admin/│       │/s/<slug>/
         (статика панели)       │
-                               ├── salon-arina:3000 ──┐
-                               └── salon-demo:3000  ──┤
+                               ├── salon-aruuke:3000 ──┐
+                               └── salon-astra:3000  ──┤
                                                       ▼
                                               postgres (одна БД на салон)
 ```
@@ -101,7 +101,7 @@
 4. Завести себя как system-admin и выдать права. Права живут в **public
    metadata** пользователя:
    - system-admin (вы): `{ "role": "system_admin" }` — ходит во все салоны
-   - владелец салона: `{ "salons": ["arina"] }` — только в свой, и **без
+   - владелец салона: `{ "salons": ["aruuke"] }` — только в свой, и **без
      доступа к QR**
 
    Дальше всё делается **из панели**, раздел «Доступы» (виден только
@@ -118,7 +118,7 @@
    То же самое из командной строки, если панель ещё не поднята:
    ```sh
    clerk api /invitations --app <app_id> -X POST \
-     -d '{"email_address":"owner@salon.kg","public_metadata":{"salons":["arina"]}}'
+     -d '{"email_address":"owner@salon.kg","public_metadata":{"salons":["aruuke"]}}'
    ```
    **Первый system-admin — курица и яйцо: панель выдать права себе не даёт,
    а до неё вы никто.** Поэтому вручную, в три шага:
@@ -181,33 +181,33 @@
 
 1. Снять дамп с Railway:
    ```sh
-   pg_dump "$RAILWAY_DATABASE_URL" -Fc -f arina.dump
+   pg_dump "$RAILWAY_DATABASE_URL" -Fc -f aruuke.dump
    ```
 2. Развернуть салон обычным способом:
    ```sh
-   scripts/new-salon.sh arina "Салон Арина" 996XXXXXXXXX
+   scripts/new-salon.sh aruuke "Aruuke" 996XXXXXXXXX
    ```
    Контейнер поднимется с пустой сессией и нарисует QR — **не сканируйте**,
    сессию сейчас заменит дамп.
 3. Остановить контейнер, чтобы он не держал базу во время восстановления:
    ```sh
-   docker compose stop salon-arina
+   docker compose stop salon-aruuke
    ```
 4. Восстановить дамп. `--clean --if-exists` обязателен: `db.init()` уже
    создал пустую схему на шаге 2, и без него `pg_restore` споткнётся о
    существующие таблицы.
    ```sh
-   docker compose exec -T postgres pg_restore -U postgres -d salon_arina \
-     --clean --if-exists --no-owner < arina.dump
+   docker compose exec -T postgres pg_restore -U postgres -d salon_aruuke \
+     --clean --if-exists --no-owner < aruuke.dump
    ```
 5. Проверить, что сессия приехала — должна быть строка `creds`:
    ```sh
-   docker compose exec -T postgres psql -U postgres -d salon_arina -c "select id from wa_auth where id='creds'"
+   docker compose exec -T postgres psql -U postgres -d salon_aruuke -c "select id from wa_auth where id='creds'"
    ```
 6. **Погасить сервис на Railway.** Не «задеплоить рядом» — сначала выключить.
 7. Только теперь поднять контейнер обратно:
    ```sh
-   docker compose up -d salon-arina
+   docker compose up -d salon-aruuke
    ```
 8. Проверка: панель → WhatsApp → статус «Подключён» (не QR). Затем живой
    тест — написать боту с телефона, дойти до подтверждения записи.

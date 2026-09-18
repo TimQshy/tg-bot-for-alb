@@ -25,13 +25,13 @@ services:
       timeout: 5s
       retries: 5
 
-  salon-arina:
+  salon-aruuke:
     <<: *salon
-    env_file: ./env/arina.env
+    env_file: ./env/aruuke.env
 
-  salon-demo:
+  salon-astra:
     <<: *salon
-    env_file: ./env/demo.env
+    env_file: ./env/astra.env
 
   # scripts/new-salon.sh inserts above this line — keep it.
   # >>> salons >>>
@@ -47,7 +47,7 @@ services:
       - ./public:/srv/admin:ro
       - ./certbot/www:/var/www/certbot:ro
       - ./certbot/conf:/etc/letsencrypt:ro
-    depends_on: [salon-arina]
+    depends_on: [salon-aruuke]
 
   certbot:
     image: certbot/certbot
