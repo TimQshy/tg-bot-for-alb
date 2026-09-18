@@ -7,7 +7,7 @@
     "start": "node src/bot.js",
     "dev": "node --watch src/bot.js",
     "seed": "node src/seed.js",
-    "test": "node --test src/*.test.js",
+    "test": "node --test --experimental-test-module-mocks src/*.test.js",
     "analyze-chats": "node src/scripts/analyzeChats.js"
   },
   "dependencies": {

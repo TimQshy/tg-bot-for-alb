@@ -23,6 +23,7 @@
   --ok:#1B6947; --ok-soft:#E2F0E7;
   --wait:#795708; --wait-soft:#F7EBD2;
   --off:rgba(24,34,32,.5); --off-soft:#EDF3EF;
+  --warn:#A4552A; --warn-soft:#F6EDE5;
   --r-card:16px; --r-sm:10px; --r-pill:999px;
   --shadow-card:0 1px 2px rgba(24,34,32,.06), 0 1px 1px rgba(24,34,32,.04);
   --shadow-sheet:0 -8px 40px rgba(24,34,32,.16);
@@ -40,6 +41,7 @@
     --ok:#7FD9AE; --ok-soft:#1A3326;
     --wait:#DEC069; --wait-soft:#37301A;
     --off:rgba(233,243,239,.45); --off-soft:#221C1F;
+    --warn:#E9A97E; --warn-soft:#3A2418;
     --shadow-card:0 1px 2px rgba(0,0,0,.4);
     --shadow-sheet:0 -8px 40px rgba(0,0,0,.55);
     --shadow-fab:0 10px 26px rgba(0,0,0,.45);
@@ -53,6 +55,7 @@
   --ok:#7FD9AE; --ok-soft:#1A3326;
   --wait:#DEC069; --wait-soft:#37301A;
   --off:rgba(233,243,239,.45); --off-soft:#221C1F;
+  --warn:#E9A97E; --warn-soft:#3A2418;
   --shadow-card:0 1px 2px rgba(0,0,0,.4);
   --shadow-sheet:0 -8px 40px rgba(0,0,0,.55);
   --shadow-fab:0 10px 26px rgba(0,0,0,.45);
@@ -212,6 +215,43 @@ h1,h2,h3{margin:0;font-weight:600}
 .field__label{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:6px}
 .input{width:100%;min-height:46px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);font-size:15px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* ── Часы работы: неделя / календарь / редактор дня ─────────────────── */
+.seg{display:flex;gap:4px;padding:4px;background:var(--surface-2);border-radius:var(--r-pill);margin:0 0 14px}
+.seg__btn{flex:1;min-height:38px;border-radius:var(--r-pill);font-size:13.5px;font-weight:500;color:var(--ink-2)}
+.seg__btn[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-card)}
+/* The switch is its own target; the rest of the row opens the day editor. */
+.hoursrow__body{flex:1;min-width:0;text-align:left;min-height:var(--tap);display:flex;flex-direction:column;justify-content:center}
+.hoursrow__hours{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:14px}
+.brk{display:inline-flex;align-items:center;height:22px;padding:0 8px;margin:5px 5px 0 0;border-radius:var(--r-pill);background:var(--warn-soft);color:var(--warn);font-size:11.5px;font-family:var(--font-num)}
+.ovr-badge{display:block;margin-top:5px;font-size:11.5px;color:var(--warn)}
+.cal{padding:12px}
+.cal__head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal__title{font-size:15px;font-weight:600}
+.cal__dow,.cal__grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal__dow span{text-align:center;font-size:11px;color:var(--ink-3);padding-bottom:6px}
+.cal__day{min-height:44px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-family:var(--font-num);font-size:13.5px;font-variant-numeric:tabular-nums}
+.cal__day--out{opacity:.3}
+.cal__day[aria-pressed="true"]{background:var(--accent);color:#fff}
+.cal__dot{width:5px;height:5px;border-radius:50%}
+.cal__dot--tpl{background:var(--ok)}
+.cal__dot--ovr{background:var(--warn)}
+.cal__dot--off{background:var(--ink-3)}
+.cal__legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:var(--ink-3)}
+.cal__legend i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px}
+.daycard{padding:14px}
+.daycard h3{font-size:15.5px;margin:0 0 4px}
+.daycard p{margin:0 0 4px;font-size:13.5px;color:var(--ink-2)}
+.daycard__acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.ivrow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ivrow .timeinput{flex:1;min-width:0}
+.ivrow .input{flex:1;min-width:0}
+.iconbtn--sm{width:38px;height:38px;flex:0 0 auto;border-radius:var(--r-sm);color:var(--ink-3);border:1px solid var(--line)}
+.slot--busy{background:var(--surface-2);color:var(--ink-3);text-decoration:line-through}
+.slot--break{background:var(--warn-soft);border-color:var(--warn-soft);color:var(--warn)}
+.warnbox{border:1px solid var(--warn);background:var(--warn-soft);color:var(--warn);border-radius:var(--r-sm);padding:10px 12px;font-size:13px;margin-top:12px}
+.warnbox__row{display:flex;align-items:center;gap:8px;margin-top:6px}
+.warnbox__row span{flex:1}
 .hint{font-size:12.5px;color:var(--ink-3);margin:2px 0 0}
 .hint--err{color:#C0392B}
 :root[data-theme="dark"] .hint--err{color:#F08A7E}
@@ -321,7 +361,30 @@ h1,h2,h3{margin:0;font-weight:600}
     <main class="col screen" id="screen-chasy" hidden>
       <div class="screen-head"><h1>Часы работы</h1><p>Слоты для онлайн-записи считаются из этого графика</p></div>
       <div class="filters" id="hoursMasterChips" role="group" aria-label="Мастер"></div>
-      <div class="card" id="hoursCard"></div>
+      <div class="seg" id="hoursViewSeg" role="tablist" aria-label="Вид графика">
+        <button class="seg__btn" role="tab" data-view="week" aria-selected="true">Неделя</button>
+        <button class="seg__btn" role="tab" data-view="calendar" aria-selected="false">Календарь</button>
+      </div>
+      <div id="hoursWeek"><div class="card" id="hoursCard"></div></div>
+      <div id="hoursCalendar" hidden>
+        <div class="card cal">
+          <div class="cal__head">
+            <button class="iconbtn" id="calPrev" aria-label="Предыдущий месяц">
+              <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <span class="cal__title" id="calTitle"></span>
+            <button class="iconbtn" id="calNext" aria-label="Следующий месяц">
+              <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+          </div>
+          <div class="cal__dow"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+          <div class="cal__grid" id="calGrid"></div>
+          <div class="cal__legend">
+            <span><i class="cal__dot--tpl"></i>по шаблону</span>
+            <span><i class="cal__dot--ovr"></i>свой график</span>
+            <span><i class="cal__dot--off"></i>выходной</span>
+          </div>
+        </div>
+        <div class="card daycard" id="calDayCard" style="margin-top:12px"></div>
+      </div>
     </main>
 
     <!-- ================= WHATSAPP ================= -->
@@ -461,6 +524,48 @@ h1,h2,h3{margin:0;font-weight:600}
   </div>
 </div>
 
+<div class="sheet" id="sheet-day" hidden role="dialog" aria-modal="true" aria-labelledby="dayTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="dayTitle">График</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body">
+    <div class="sheet__ctx" id="dayCtx"></div>
+
+    <div class="seg" id="dayKindSeg" role="group" aria-label="Режим дня">
+      <button class="seg__btn" data-kind="template" aria-selected="false">По шаблону</button>
+      <button class="seg__btn" data-kind="custom" aria-selected="true">Свой график</button>
+      <button class="seg__btn" data-kind="dayoff" aria-selected="false">Выходной</button>
+    </div>
+
+    <div id="dayEditor">
+      <span class="field__label">Рабочее время</span>
+      <div id="dayIntervals"></div>
+      <button class="btn btn--ghost btn--block" id="addIntervalBtn" style="margin-bottom:16px">+ Ещё интервал</button>
+
+      <span class="field__label">Перерывы</span>
+      <div id="dayBreaks"></div>
+      <button class="btn btn--ghost btn--block" id="addBreakBtn" style="margin-bottom:16px">+ Добавить перерыв</button>
+
+      <span class="field__label">Слоты онлайн-записи</span>
+      <div class="slots" id="daySlots" style="margin-bottom:6px"></div>
+      <p class="hint" id="daySlotsHint"></p>
+
+      <div class="warnbox" id="dayConflicts" hidden></div>
+
+      <label style="display:flex;align-items:center;gap:8px;margin-top:16px" id="dayRepeatWrap">
+        <button class="switch" role="switch" id="dayRepeat" aria-checked="false"></button>
+        <span class="field__label" style="margin:0" id="dayRepeatLabel">Повторять каждую неделю</span>
+      </label>
+    </div>
+
+    <p class="hint hint--err" id="dayHint"></p>
+  </div>
+  <div class="sheet__foot">
+    <button class="btn btn--ghost" data-close>Отмена</button>
+    <button class="btn btn--primary" id="daySubmitBtn">Сохранить</button>
+  </div>
+</div>
+
 <div class="sheet" id="sheet-masteredit" hidden role="dialog" aria-modal="true" aria-labelledby="mstTitle">
   <div class="sheet__grab"></div>
   <div class="sheet__head"><h2 class="sheet__title" id="mstTitle">Мастер</h2>
@@ -577,8 +682,13 @@ const state = {
   filterStatus: 'confirmed',
   appts: [],              // currently rendered day's appointments
   weekCounts: {},         // date -> count, for day-strip dots
-  hoursCache: {},         // masterId -> working_hours rows
+  dayCache: {},           // "masterId|date" -> promise of /api/schedule/day
   hoursMasterId: null,
+  hoursView: 'week',      // 'week' | 'calendar'
+  hoursMonth: null,       // 'YYYY-MM'
+  hoursDate: null,        // date selected in the calendar
+  template: [],           // schedule_template rows of hoursMasterId
+  daySheet: null,
   newAppt: { serviceId: null, masterId: null, slot: null, masters: [] },
   move: { apptId: null, masterId: null, durationMin: null, slot: null },
   svc: { id: null, masterIds: [] },
@@ -947,12 +1057,15 @@ async function loadAppointments() {
   await renderTimeline();
 }
 
-async function getMasterHours(masterId, dow) {
-  if (!state.hoursCache[masterId]) {
-    state.hoursCache[masterId] = await api('/api/working-hours?masterId=' + masterId);
-  }
-  return state.hoursCache[masterId].find(h => h.day_of_week === dow) || null;
+// The effective day — override or template, with its slots and conflicts.
+// Cached per master/date because the timeline, the day card and the editor
+// all want the same answer; every write clears it.
+function getDayInfo(masterId, date) {
+  const key = `${masterId}|${date}`;
+  if (!state.dayCache[key]) state.dayCache[key] = api(`/api/schedule/day?masterId=${masterId}&date=${date}`);
+  return state.dayCache[key];
 }
+function invalidateDayCache() { state.dayCache = {}; }
 
 function toMin(t) { const [h, m] = fmtTime(t).split(':').map(Number); return h * 60 + m; }
 function toHHMM(min) { return `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`; }
@@ -969,18 +1082,24 @@ async function renderTimeline() {
   let gapsHtml = '';
   let gapsInfo = '<span class="dot"></span><span>выберите одного мастера, чтобы увидеть окна</span>';
   if (state.filterMasterId) {
-    const dow = dowMon0(state.date);
-    const hours = await getMasterHours(state.filterMasterId, dow);
-    if (hours) {
-      const start = toMin(hours.start_time), end = toMin(hours.end_time);
-      let cursor = start;
+    const day = await getDayInfo(state.filterMasterId, state.date);
+    if (day.isWorking && day.intervals.length) {
+      // A gap is working time with neither an appointment nor a break in it.
       const gaps = [];
-      for (const a of confirmed) {
-        const s = toMin(a.start_time), e = toMin(a.end_time);
-        if (s > cursor) gaps.push({ start: cursor, end: s });
-        cursor = Math.max(cursor, e);
+      for (const iv of day.intervals) {
+        const ivStart = toMin(iv.from), ivEnd = toMin(iv.to);
+        const blocks = [
+          ...confirmed.map(a => ({ start: toMin(a.start_time), end: toMin(a.end_time) })),
+          ...(iv.breaks || []).map(b => ({ start: toMin(b.from), end: toMin(b.to) })),
+        ].filter(b => b.end > ivStart && b.start < ivEnd).sort((a, b) => a.start - b.start);
+
+        let cursor = ivStart;
+        for (const b of blocks) {
+          if (b.start > cursor) gaps.push({ start: cursor, end: b.start });
+          cursor = Math.max(cursor, b.end);
+        }
+        if (cursor < ivEnd) gaps.push({ start: cursor, end: ivEnd });
       }
-      if (cursor < end) gaps.push({ start: cursor, end });
       gapsInfo = `<span class="dot"></span><span>${gaps.length} окон${gaps.length === 1 ? 'о' : ''}</span>`;
       gapsHtml = gaps.filter(g => g.end - g.start >= 10).map(g => `
         <li class="tl-gap">
@@ -1310,15 +1429,36 @@ document.getElementById('mstSubmitBtn').addEventListener('click', async () => {
   } catch { hint.textContent = 'Не получилось сохранить'; }
 });
 
+
 // ── Часы работы ───────────────────────────────────────────────────────
+// Two levels, same as the API: the weekly template, and per-date overrides
+// on top of it. The day editor writes one or the other and never both,
+// except through the explicit "repeat every <weekday>" switch.
 const DAY_NAMES_SHORT = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const DAY_NAMES_ACC = ['понедельник','вторник','среду','четверг','пятницу','субботу','воскресенье'];
+const MONTHS_FULL = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+const OVERRIDE_LOOKAHEAD_DAYS = 14;
+
+function ymOf(dateStr) { return dateStr.slice(0, 7); }
+function monthFirst(ym) { return ym + '-01'; }
+function monthLast(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+}
+function shiftMonth(ym, n) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
 async function loadHoursScreen() {
   const masters = activeMasters();
-  if (!state.hoursMasterId && masters.length) state.hoursMasterId = masters[0].id;
-  const chips = document.getElementById('hoursMasterChips');
-  chips.innerHTML = masters.map(m =>
+  if (!masters.some(m => m.id === state.hoursMasterId)) {
+    state.hoursMasterId = masters.length ? masters[0].id : null;
+  }
+  document.getElementById('hoursMasterChips').innerHTML = masters.map(m =>
     `<button class="chip${m.id === state.hoursMasterId ? ' chip--on' : ''}" data-master-id="${m.id}">${escapeHtml(m.name)}</button>`).join('');
-  await renderHoursCard();
+  await renderHoursView();
 }
 document.getElementById('hoursMasterChips').addEventListener('click', async e => {
   const b = e.target.closest('.chip');
@@ -1326,49 +1466,434 @@ document.getElementById('hoursMasterChips').addEventListener('click', async e =>
   state.hoursMasterId = Number(b.dataset.masterId);
   document.querySelectorAll('#hoursMasterChips .chip').forEach(c => c.classList.remove('chip--on'));
   b.classList.add('chip--on');
-  await renderHoursCard();
+  await renderHoursView();
 });
-async function renderHoursCard() {
-  if (!state.hoursMasterId) { document.getElementById('hoursCard').innerHTML = '<div class="row"><span class="row__main">Нет мастеров</span></div>'; return; }
-  const hours = await api('/api/working-hours?masterId=' + state.hoursMasterId);
-  delete state.hoursCache[state.hoursMasterId];
-  state.hoursCache[state.hoursMasterId] = hours;
-  const byDay = Object.fromEntries(hours.map(h => [h.day_of_week, h]));
-  const card = document.getElementById('hoursCard');
-  card.innerHTML = DAY_NAMES_SHORT.map((name, i) => {
-    const h = byDay[i];
-    const on = !!h;
-    return `<div class="hoursrow${on ? '' : ' hoursrow--off'}" data-day="${i}">
+document.getElementById('hoursViewSeg').addEventListener('click', async e => {
+  const b = e.target.closest('.seg__btn');
+  if (!b) return;
+  state.hoursView = b.dataset.view;
+  await renderHoursView();
+});
+
+async function renderHoursView() {
+  const isWeek = state.hoursView !== 'calendar';
+  document.querySelectorAll('#hoursViewSeg .seg__btn').forEach(b =>
+    b.setAttribute('aria-selected', String((b.dataset.view === 'week') === isWeek)));
+  document.getElementById('hoursWeek').hidden = !isWeek;
+  document.getElementById('hoursCalendar').hidden = isWeek;
+
+  if (!state.hoursMasterId) {
+    document.getElementById('hoursCard').innerHTML = '<div class="row"><span class="row__main">Сначала добавьте мастера</span></div>';
+    return;
+  }
+  return isWeek ? renderWeekTab() : renderCalendarTab();
+}
+
+// The whole point of showing upcoming exceptions next to the weekly row: a
+// salon editing the template should see which nearby dates will ignore it.
+async function renderWeekTab() {
+  const masterId = state.hoursMasterId;
+  const from = todayISO();
+  const to = addDaysISO(from, OVERRIDE_LOOKAHEAD_DAYS);
+  const [template, overrides] = await Promise.all([
+    api('/api/schedule/template?masterId=' + masterId),
+    api(`/api/schedule/overrides?masterId=${masterId}&from=${from}&to=${to}`),
+  ]);
+  state.template = template;
+
+  const byDay = Object.fromEntries(template.map(t => [t.weekday, t]));
+  const upcoming = {};
+  for (const o of overrides) {
+    const date = String(o.date).slice(0, 10);
+    (upcoming[dowMon0(date)] = upcoming[dowMon0(date)] || []).push({ date, kind: o.kind });
+  }
+
+  document.getElementById('hoursCard').innerHTML = DAY_NAMES_SHORT.map((name, weekday) => {
+    const t = byDay[weekday];
+    const working = !!(t && t.is_working && t.intervals?.length);
+    const hours = working
+      ? t.intervals.map(iv => `${iv.from}–${iv.to}`).join(', ')
+      : 'выходной';
+    const breaks = working
+      ? t.intervals.flatMap(iv => (iv.breaks || []).map(b =>
+          `<span class="brk">${b.from}–${b.to}${b.note ? ' · ' + escapeHtml(b.note) : ''}</span>`)).join('')
+      : '';
+    const badges = (upcoming[weekday] || []).map(o =>
+      `<span class="ovr-badge" data-goto-date="${o.date}">${fmtDayShort(o.date)} — ${o.kind === 'dayoff' ? 'выходной' : 'свой график'}</span>`).join('');
+
+    return `<div class="hoursrow${working ? '' : ' hoursrow--off'}" data-weekday="${weekday}">
       <span class="hoursrow__day">${name}</span>
-      <button class="switch" role="switch" aria-checked="${on}" aria-label="${name}"></button>
-      ${on
-        ? `<span class="timepair"><input class="timeinput" type="time" data-start value="${fmtTime(h.start_time)}"><span>—</span><input class="timeinput" type="time" data-end value="${fmtTime(h.end_time)}"></span>`
-        : `<span class="hoursrow__off">выходной</span>`}
+      <button class="switch" role="switch" aria-checked="${working}" aria-label="${name}" data-toggle-weekday="${weekday}"></button>
+      <button class="hoursrow__body" data-edit-weekday="${weekday}">
+        <span class="hoursrow__hours">${hours}</span>
+        <span>${breaks}${badges}</span>
+      </button>
     </div>`;
   }).join('');
 
-  card.querySelectorAll('.switch').forEach(sw => sw.addEventListener('click', async () => {
-    const row = sw.closest('.hoursrow');
-    const day = Number(row.dataset.day);
-    const turningOn = sw.getAttribute('aria-checked') !== 'true';
-    if (turningOn) {
-      await api('/api/working-hours', { method: 'PUT', body: JSON.stringify({ masterId: state.hoursMasterId, dayOfWeek: day, startTime: '09:00', endTime: '19:00' }) });
-    } else {
-      await api('/api/working-hours', { method: 'PUT', body: JSON.stringify({ masterId: state.hoursMasterId, dayOfWeek: day, startTime: null, endTime: null }) });
-    }
-    await renderHoursCard();
+  const card = document.getElementById('hoursCard');
+  card.querySelectorAll('[data-toggle-weekday]').forEach(sw => sw.addEventListener('click', async () => {
+    const weekday = Number(sw.dataset.toggleWeekday);
+    const on = sw.getAttribute('aria-checked') !== 'true';
+    await api('/api/schedule/template', {
+      method: 'PUT',
+      body: JSON.stringify({
+        masterId, weekday, isWorking: on,
+        intervals: on ? [{ from: '09:00', to: '19:00', breaks: [] }] : [],
+      }),
+    });
+    invalidateDayCache();
+    await renderWeekTab();
   }));
-  card.querySelectorAll('input[type=time]').forEach(inp => inp.addEventListener('change', async () => {
-    const row = inp.closest('.hoursrow');
-    const day = Number(row.dataset.day);
-    const startTime = row.querySelector('[data-start]').value;
-    const endTime = row.querySelector('[data-end]').value;
-    if (!startTime || !endTime) return;
-    await api('/api/working-hours', { method: 'PUT', body: JSON.stringify({ masterId: state.hoursMasterId, dayOfWeek: day, startTime, endTime }) });
-    delete state.hoursCache[state.hoursMasterId];
-    toast('Сохранено');
+  card.querySelectorAll('[data-edit-weekday]').forEach(b => b.addEventListener('click', () =>
+    openTemplateSheet(Number(b.dataset.editWeekday))));
+  card.querySelectorAll('[data-goto-date]').forEach(b => b.addEventListener('click', async e => {
+    e.stopPropagation();
+    state.hoursView = 'calendar';
+    state.hoursDate = b.dataset.gotoDate;
+    state.hoursMonth = ymOf(state.hoursDate);
+    await renderHoursView();
   }));
 }
+
+async function renderCalendarTab() {
+  const masterId = state.hoursMasterId;
+  const ym = state.hoursMonth || ymOf(todayISO());
+  state.hoursMonth = ym;
+
+  const [template, overrides] = await Promise.all([
+    api('/api/schedule/template?masterId=' + masterId),
+    api(`/api/schedule/overrides?masterId=${masterId}&from=${monthFirst(ym)}&to=${monthLast(ym)}`),
+  ]);
+  const byDay = Object.fromEntries(template.map(t => [t.weekday, t]));
+  const byDate = Object.fromEntries(overrides.map(o => [String(o.date).slice(0, 10), o]));
+
+  const [y, m] = ym.split('-').map(Number);
+  document.getElementById('calTitle').textContent = `${MONTHS_FULL[m - 1]} ${y}`;
+
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const lead = dowMon0(monthFirst(ym));
+  const today = todayISO();
+
+  let cells = '<span></span>'.repeat(lead);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = `${ym}-${String(d).padStart(2, '0')}`;
+    const ovr = byDate[date];
+    const t = byDay[dowMon0(date)];
+    // Grey covers both kinds of day off: the template's and an override's.
+    let dot = 'off';
+    if (ovr) dot = ovr.kind === 'dayoff' ? 'off' : 'ovr';
+    else if (t && t.is_working && t.intervals?.length) dot = 'tpl';
+
+    cells += `<button class="cal__day${date < today ? ' cal__day--out' : ''}"
+      data-date="${date}" aria-pressed="${date === state.hoursDate}">
+      ${d}<span class="cal__dot cal__dot--${dot}"></span></button>`;
+  }
+  document.getElementById('calGrid').innerHTML = cells;
+  document.getElementById('calGrid').querySelectorAll('[data-date]').forEach(b =>
+    b.addEventListener('click', async () => {
+      state.hoursDate = b.dataset.date;
+      await renderCalendarTab();
+    }));
+
+  await renderDayCard();
+}
+
+document.getElementById('calPrev').addEventListener('click', async () => {
+  state.hoursMonth = shiftMonth(state.hoursMonth || ymOf(todayISO()), -1);
+  await renderCalendarTab();
+});
+document.getElementById('calNext').addEventListener('click', async () => {
+  state.hoursMonth = shiftMonth(state.hoursMonth || ymOf(todayISO()), 1);
+  await renderCalendarTab();
+});
+
+async function renderDayCard() {
+  const card = document.getElementById('calDayCard');
+  if (!state.hoursDate) {
+    card.innerHTML = '<p style="margin:0">Выберите дату, чтобы посмотреть и изменить её график.</p>';
+    return;
+  }
+  const masterId = state.hoursMasterId;
+  const date = state.hoursDate;
+  const day = await getDayInfo(masterId, date);
+
+  const source = day.source === 'override'
+    ? (day.kind === 'dayoff' ? 'Выходной на эту дату' : 'Свой график на эту дату')
+    : (day.isWorking ? 'По шаблону недели' : 'Выходной по шаблону');
+  const free = day.slots.filter(s => s.status === 'free').length;
+  const breaks = day.intervals.flatMap(iv => (iv.breaks || []).map(b =>
+    `<span class="brk">${b.from}–${b.to}${b.note ? ' · ' + escapeHtml(b.note) : ''}</span>`)).join('');
+
+  card.innerHTML = `
+    <h3>${fmtDayShort(date)}, ${DAY_NAMES_SHORT[dowMon0(date)].toLowerCase()}</h3>
+    <p>${source}</p>
+    <p class="hoursrow__hours">${day.intervals.length ? day.intervals.map(iv => `${iv.from}–${iv.to}`).join(', ') : '—'}</p>
+    ${breaks ? `<p style="margin:0">${breaks}</p>` : ''}
+    <p style="margin-top:6px">${day.isWorking ? `${free} свободных слотов` : 'записи недоступны'}</p>
+    <div class="daycard__acts">
+      <button class="btn btn--primary" id="editDayBtn">Изменить день</button>
+      ${day.source === 'override' ? '<button class="btn btn--ghost" id="resetDayBtn">Вернуть шаблон</button>' : ''}
+    </div>`;
+
+  document.getElementById('editDayBtn').addEventListener('click', () => openDaySheet(date, day));
+  const reset = document.getElementById('resetDayBtn');
+  if (reset) reset.addEventListener('click', async () => {
+    await api(`/api/schedule/override?masterId=${masterId}&date=${date}`, { method: 'DELETE' });
+    invalidateDayCache();
+    toast('Дата снова по шаблону');
+    await renderCalendarTab();
+  });
+}
+
+// ── Редактор дня (шторка) ─────────────────────────────────────────────
+// Intervals and breaks are edited as two flat lists, the way the salon
+// thinks about them, and only assembled into the nested API shape on save.
+function openTemplateSheet(weekday) {
+  const t = (state.template || []).find(x => x.weekday === weekday);
+  const working = !!(t && t.is_working && t.intervals?.length);
+  state.daySheet = {
+    mode: 'template',
+    masterId: state.hoursMasterId,
+    weekday,
+    kind: working ? 'custom' : 'dayoff',
+    intervals: working ? t.intervals.map(iv => ({ from: iv.from, to: iv.to })) : [{ from: '09:00', to: '19:00' }],
+    breaks: working ? t.intervals.flatMap(iv => (iv.breaks || []).map(b => ({ ...b }))) : [],
+  };
+  document.getElementById('dayTitle').textContent = 'График на ' + DAY_NAMES_ACC[weekday];
+  document.getElementById('dayCtx').innerHTML =
+    `<span>Каждый${weekday === 2 || weekday === 4 ? 'у' : ''} ${DAY_NAMES_ACC[weekday]} · ${escapeHtml(masterName(state.hoursMasterId))}</span>`;
+  document.getElementById('daySubmitBtn').textContent = 'Сохранить';
+  renderDaySheet();
+  openSheet('sheet-day');
+}
+
+function openDaySheet(date, day, prefillBreak = null) {
+  const isOverride = day.source === 'override';
+  state.daySheet = {
+    mode: 'date',
+    masterId: state.hoursMasterId || state.filterMasterId,
+    date,
+    kind: isOverride ? day.kind : 'template',
+    // Even under the template, the editor starts from the hours that are
+    // actually in force, so switching to "свой график" is a tweak and not a
+    // blank form.
+    intervals: day.intervals.length ? day.intervals.map(iv => ({ from: iv.from, to: iv.to })) : [{ from: '09:00', to: '19:00' }],
+    breaks: day.intervals.flatMap(iv => (iv.breaks || []).map(b => ({ ...b }))),
+  };
+  if (prefillBreak) {
+    state.daySheet.kind = 'custom';
+    state.daySheet.breaks.push(prefillBreak);
+  }
+  document.getElementById('dayTitle').textContent = 'График на ' + fmtDayShort(date);
+  document.getElementById('dayCtx').innerHTML =
+    `<span>${fmtDayShort(date)}, ${DAY_NAMES_SHORT[dowMon0(date)].toLowerCase()} · ${escapeHtml(masterName(state.daySheet.masterId))}</span>`;
+  document.getElementById('daySubmitBtn').textContent = 'Сохранить на ' + fmtDayShort(date);
+  renderDaySheet();
+  openSheet('sheet-day');
+}
+
+function renderDaySheet() {
+  const d = state.daySheet;
+  const isDate = d.mode === 'date';
+
+  document.querySelectorAll('#dayKindSeg .seg__btn').forEach(b => {
+    b.hidden = b.dataset.kind === 'template' && !isDate;
+    b.setAttribute('aria-selected', String(b.dataset.kind === d.kind));
+  });
+  document.getElementById('dayRepeatWrap').hidden = !isDate;
+  document.getElementById('dayRepeatLabel').textContent =
+    isDate ? `Повторять каждую${[2, 4].includes(dowMon0(d.date)) ? 'ю' : ''} ${DAY_NAMES_ACC[dowMon0(d.date)]}` : '';
+  document.getElementById('dayEditor').hidden = d.kind === 'dayoff' || d.kind === 'template';
+  document.getElementById('dayHint').textContent = '';
+
+  document.getElementById('dayIntervals').innerHTML = d.intervals.map((iv, i) => `
+    <div class="ivrow" data-iv="${i}">
+      <input class="timeinput" type="time" data-iv-from value="${iv.from}">
+      <span style="color:var(--ink-3)">—</span>
+      <input class="timeinput" type="time" data-iv-to value="${iv.to}">
+      <button class="iconbtn iconbtn--sm" data-del-iv="${i}" aria-label="Удалить интервал"${d.intervals.length === 1 ? ' disabled' : ''}>
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>`).join('');
+
+  document.getElementById('dayBreaks').innerHTML = d.breaks.length
+    ? d.breaks.map((b, i) => `
+      <div class="ivrow" data-br="${i}">
+        <input class="timeinput" type="time" data-br-from value="${b.from}">
+        <span style="color:var(--ink-3)">—</span>
+        <input class="timeinput" type="time" data-br-to value="${b.to}">
+        <input class="input" data-br-note placeholder="причина" value="${escapeHtml(b.note || '')}">
+        <button class="iconbtn iconbtn--sm" data-del-br="${i}" aria-label="Удалить перерыв">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>`).join('')
+    : '<p class="hint" style="margin-bottom:8px">Перерывов нет</p>';
+
+  bindDaySheetInputs();
+  schedulePreview();
+}
+
+function bindDaySheetInputs() {
+  const d = state.daySheet;
+  const ivWrap = document.getElementById('dayIntervals');
+  const brWrap = document.getElementById('dayBreaks');
+
+  ivWrap.querySelectorAll('[data-iv-from],[data-iv-to]').forEach(inp => inp.addEventListener('change', () => {
+    const i = Number(inp.closest('.ivrow').dataset.iv);
+    d.intervals[i][inp.hasAttribute('data-iv-from') ? 'from' : 'to'] = inp.value;
+    schedulePreview();
+  }));
+  ivWrap.querySelectorAll('[data-del-iv]').forEach(b => b.addEventListener('click', () => {
+    d.intervals.splice(Number(b.dataset.delIv), 1);
+    renderDaySheet();
+  }));
+
+  brWrap.querySelectorAll('[data-br-from],[data-br-to],[data-br-note]').forEach(inp => inp.addEventListener('change', () => {
+    const i = Number(inp.closest('.ivrow').dataset.br);
+    if (inp.hasAttribute('data-br-note')) d.breaks[i].note = inp.value;
+    else d.breaks[i][inp.hasAttribute('data-br-from') ? 'from' : 'to'] = inp.value;
+    schedulePreview();
+  }));
+  brWrap.querySelectorAll('[data-del-br]').forEach(b => b.addEventListener('click', () => {
+    d.breaks.splice(Number(b.dataset.delBr), 1);
+    renderDaySheet();
+  }));
+}
+
+document.getElementById('dayKindSeg').addEventListener('click', e => {
+  const b = e.target.closest('.seg__btn');
+  if (!b) return;
+  state.daySheet.kind = b.dataset.kind;
+  renderDaySheet();
+});
+document.getElementById('addIntervalBtn').addEventListener('click', () => {
+  const last = state.daySheet.intervals[state.daySheet.intervals.length - 1];
+  state.daySheet.intervals.push({ from: last ? last.to : '09:00', to: '21:00' });
+  renderDaySheet();
+});
+document.getElementById('addBreakBtn').addEventListener('click', () => {
+  state.daySheet.breaks.push({ from: '13:00', to: '14:00', note: '' });
+  renderDaySheet();
+});
+document.getElementById('dayRepeat').addEventListener('click', function () {
+  this.setAttribute('aria-checked', String(this.getAttribute('aria-checked') !== 'true'));
+});
+
+// A break belongs to whichever working interval contains it; the flat editor
+// list is folded back into that shape here, and a break that fits none of
+// them is a validation error rather than a silently dropped one.
+function assembleIntervals() {
+  const d = state.daySheet;
+  const intervals = d.intervals.map(iv => ({ from: iv.from, to: iv.to, breaks: [] }));
+  for (const b of d.breaks) {
+    if (!b.from || !b.to) throw new Error('Заполните время перерыва');
+    const host = intervals.find(iv => b.from >= iv.from && b.to <= iv.to);
+    if (!host) throw new Error(`Перерыв ${b.from}–${b.to} не попадает в рабочее время`);
+    host.breaks.push({ from: b.from, to: b.to, note: b.note || '' });
+  }
+  return intervals;
+}
+
+let previewTimer = null;
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(renderPreview, 300);
+}
+
+async function renderPreview() {
+  const d = state.daySheet;
+  const grid = document.getElementById('daySlots');
+  const hint = document.getElementById('daySlotsHint');
+  const warn = document.getElementById('dayConflicts');
+  if (d.kind === 'dayoff' || d.kind === 'template') { grid.innerHTML = ''; hint.textContent = ''; warn.hidden = true; return; }
+
+  let intervals;
+  try {
+    intervals = assembleIntervals();
+  } catch (e) {
+    grid.innerHTML = ''; hint.textContent = '';
+    document.getElementById('dayHint').textContent = e.message;
+    return;
+  }
+  document.getElementById('dayHint').textContent = '';
+
+  let preview;
+  try {
+    preview = await api('/api/schedule/preview', {
+      method: 'POST',
+      body: JSON.stringify({ masterId: d.masterId, date: d.date || todayISO(), kind: 'custom', intervals }),
+    });
+  } catch (err) {
+    grid.innerHTML = '';
+    document.getElementById('dayHint').textContent = err.message || 'Проверьте интервалы';
+    return;
+  }
+
+  grid.innerHTML = preview.slots.map(s =>
+    `<span class="slot${s.status === 'busy' ? ' slot--busy' : s.status === 'break' ? ' slot--break' : ''}">${s.start}</span>`).join('');
+  hint.textContent = preview.slots.length
+    ? `${preview.slots.filter(s => s.status === 'free').length} свободно · занято и перерывы зачёркнуты`
+    : 'В этих интервалах не помещается ни одна запись';
+
+  // Conflicts are shown, never blocking: the appointment stays until someone
+  // decides what to do with it.
+  if (d.mode === 'date' && preview.conflicts.length) {
+    warn.hidden = false;
+    warn.innerHTML = `<b>Записи попадают в нерабочее время</b>` + preview.conflicts.map(c =>
+      `<div class="warnbox__row"><span>${c.start}–${c.end} · ${escapeHtml(c.user_name)}</span>
+       <button class="btn btn--ghost" data-move-conflict="${c.id}">Перенести</button></div>`).join('');
+    warn.querySelectorAll('[data-move-conflict]').forEach(b => b.addEventListener('click', async () => {
+      closeSheet();
+      await openMoveSheet(b.dataset.moveConflict);
+    }));
+  } else {
+    warn.hidden = true;
+  }
+}
+
+document.getElementById('daySubmitBtn').addEventListener('click', async () => {
+  const d = state.daySheet;
+  const hint = document.getElementById('dayHint');
+
+  try {
+    if (d.mode === 'template') {
+      const isWorking = d.kind !== 'dayoff';
+      await api('/api/schedule/template', {
+        method: 'PUT',
+        body: JSON.stringify({
+          masterId: d.masterId, weekday: d.weekday, isWorking,
+          intervals: isWorking ? assembleIntervals() : [],
+        }),
+      });
+    } else if (d.kind === 'template') {
+      // Back to the template: drop the exception rather than freeze today's
+      // hours into it.
+      await api(`/api/schedule/override?masterId=${d.masterId}&date=${d.date}`, { method: 'DELETE' });
+    } else {
+      const repeatWeekly = document.getElementById('dayRepeat').getAttribute('aria-checked') === 'true';
+      const res = await api('/api/schedule/override', {
+        method: 'PUT',
+        body: JSON.stringify({
+          masterId: d.masterId, date: d.date, kind: d.kind,
+          intervals: d.kind === 'custom' ? assembleIntervals() : [],
+          repeatWeekly,
+        }),
+      });
+      if (res.conflicts?.length) toast(`Сохранено. Записей в конфликте: ${res.conflicts.length}`);
+    }
+  } catch (err) {
+    hint.textContent = err.message || 'Не получилось сохранить';
+    return;
+  }
+
+  invalidateDayCache();
+  closeSheet();
+  toast('Сохранено');
+  if (document.getElementById('screen-chasy').hidden) {
+    await loadAppointments();
+  } else {
+    await renderHoursView();
+  }
+});
 
 // ── Auth bootstrap ─────────────────────────────────────────────────────
 function loadScript(src, attrs) {

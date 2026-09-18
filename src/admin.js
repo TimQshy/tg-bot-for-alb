@@ -261,46 +261,6 @@ adminRouter.put('/api/masters/:id', async (req, res) => {
   res.json(master);
 });
 
-// ── Working hours (compatibility shim) ────────────────────────────────────
-// The panel still speaks the old single-interval API; the hours screen is
-// rewritten in the next change and this goes with it. Backed by the template
-// so both shapes read and write the same rows.
-adminRouter.get('/api/working-hours', async (req, res) => {
-  const masterId = parseInt(req.query.masterId, 10);
-  if (!masterId) return res.status(400).json({ error: 'missing_master_id' });
-
-  const template = await db.getScheduleTemplate(masterId);
-  res.json(
-    template
-      .filter(t => t.is_working && t.intervals?.length)
-      .map(t => ({
-        master_id: t.master_id,
-        day_of_week: t.weekday,
-        start_time: t.intervals[0].from,
-        end_time: t.intervals[t.intervals.length - 1].to,
-      }))
-  );
-});
-
-adminRouter.put('/api/working-hours', async (req, res) => {
-  const { masterId, dayOfWeek, startTime, endTime } = req.body || {};
-  if (masterId == null || dayOfWeek == null) return res.status(400).json({ error: 'missing_fields' });
-
-  if (!startTime || !endTime) {
-    await db.upsertTemplateDay(masterId, dayOfWeek, false, []);
-    return res.json({ ok: true });
-  }
-
-  let intervals;
-  try {
-    intervals = validateIntervals([{ from: startTime, to: endTime, breaks: [] }]);
-  } catch (err) {
-    return res.status(400).json({ error: err.code || 'invalid_intervals', message: err.message });
-  }
-  await db.upsertTemplateDay(masterId, dayOfWeek, true, intervals);
-  res.json({ ok: true });
-});
-
 // ── Schedule: weekly template ─────────────────────────────────────────────
 // Editing the template never touches dates that carry an override — that is
 // the whole point of the two levels, so there is no cascade here.
