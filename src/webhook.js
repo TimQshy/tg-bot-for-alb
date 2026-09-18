@@ -11,6 +11,7 @@ import * as waitlist from './waitlist.js';
 import { adminRouter } from './admin.js';
 import { instagramRouter, instagramEnabled } from './instagram.js';
 import { askAI } from './ai.js';
+import { runAgent, agentEnabled, clearHistory } from './aiAgent.js';
 
 const GREETING_WORDS = ['старт', 'start', 'меню', 'menu', 'привет', 'hi', 'hello'];
 // How long the bot keeps quiet in a chat after a human answered there.
@@ -62,7 +63,7 @@ app.use('/s/:slug/admin', adminRouter);
 
 // ── Inbound messages — called by whatsapp.js for every incoming chat message ─
 export async function handleIncoming(phone, { text, profileName }) {
-  await db.upsertUser({ id: phone, name: profileName || phone });
+  await db.upsertUser({ id: phone, name: profileName || null });
   db.logMessage({ phone, direction: 'in', text }).catch(() => {});
 
   const trimmed = (text || '').trim();
@@ -106,31 +107,41 @@ export async function handleIncoming(phone, { text, profileName }) {
   const lower = trimmed.toLowerCase();
   if (GREETING_WORDS.includes(lower)) {
     clearSession(phone);
+    clearHistory(phone);
     return booking.sendMainMenu(phone);
   }
 
   const pendingMenu = getLastMenu(phone);
   const session = getSession(phone);
 
-  // A menu is showing but the reply didn't resolve to one of its numbers —
-  // nudge back rather than silently falling through to the FSM/AI below.
-  if (pendingMenu && trimmed) {
+  // A digit that didn't resolve against the menu showing — out of range, or
+  // the menu has aged out. Nudge rather than handing "7" to the agent as if
+  // it were a sentence.
+  if (pendingMenu && /^\d+$/.test(trimmed)) {
     return sendText(phone, `Ответьте цифрой из списка выше (1–${pendingMenu.length}). Или напишите "меню".`);
   }
 
-  // Free text mid-FSM-step with no menu recorded (shouldn't normally happen
-  // since every FSM step shows a menu, but session TTL/restart edge cases
-  // can leave this stale) — nudge back to the menu instead of the FSM
-  // silently misreading the text as something else.
+  // Words mid-FSM: the client stopped picking numbers and started talking.
+  // Drop the half-finished FSM state (and its stale menu, so a later digit
+  // isn't read as a slot choice) and let the agent carry the conversation.
   if (session) {
+    clearSession(phone);
     clearLastMenu(phone);
-    return booking.sendMainMenu(phone, 'Начнём заново. Чем можем помочь?');
   }
 
-  // Free text, no active session/menu: try the FAQ AI consultant before
-  // giving up.
-  if (text) {
-    const result = await askAI(text);
+  if (!trimmed) return booking.sendMainMenu(phone);
+
+  // Free text: the conversational agent books, moves and cancels on its own.
+  // Without a DeepSeek key it degrades to the FAQ-only answer, and that to
+  // the numbered menu.
+  if (agentEnabled()) {
+    const answer = await runAgent(phone, trimmed);
+    if (answer) {
+      console.log(`[agent] replied to ${phone}`);
+      return sendText(phone, answer);
+    }
+  } else {
+    const result = await askAI(trimmed);
     if (result) {
       console.log(`[ai] answered via ${result.model} for ${phone}`);
       return sendText(phone, result.answer);
@@ -162,5 +173,6 @@ export async function handleHumanReply(phone, { text }) {
   // answer a bare "2" hours later as a menu choice.
   clearSession(phone);
   clearLastMenu(phone);
+  clearHistory(phone);
   console.log(`[takeover] admin replied to ${phone}, bot paused for ${TAKEOVER_MINUTES}m`);
 }

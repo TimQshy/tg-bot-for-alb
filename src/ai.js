@@ -27,29 +27,46 @@ async function buildSystemPrompt() {
   );
 }
 
+// One raw call. Returns the assistant message as the API gave it — content
+// and, when the model wants to use a tool, tool_calls — so the agent loop in
+// aiAgent.js can drive several rounds. Throws; callers decide what a failure
+// means for the client.
+export async function chat({ messages, tools = null, temperature = 0.3 }) {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) throw new Error('DEEPSEEK_API_KEY is not set');
+
+  const res = await fetch(DEEPSEEK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages,
+      temperature,
+      ...(tools ? { tools, tool_choice: 'auto' } : {}),
+    }),
+  });
+
+  if (!res.ok) throw new Error(`DeepSeek error ${res.status}: ${await res.text().catch(() => '')}`);
+
+  const data = await res.json();
+  const message = data?.choices?.[0]?.message;
+  if (!message) throw new Error('DeepSeek returned no message');
+  return message;
+}
+
 // Reused by the one-off chat-analysis script (src/scripts/analyzeChats.js)
 // with its own prompt.
 export async function askWithSystemPrompt(systemPrompt, userText) {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) return null;
+  if (!process.env.DEEPSEEK_API_KEY) return null;
 
   try {
-    const res = await fetch(DEEPSEEK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userText },
-        ],
-      }),
+    const message = await chat({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userText },
+      ],
     });
-
-    if (!res.ok) throw new Error(`DeepSeek error ${res.status}: ${await res.text().catch(() => '')}`);
-
-    const data = await res.json();
-    const answer = data?.choices?.[0]?.message?.content?.trim();
+    const answer = message.content?.trim();
     return answer ? { answer, model: 'deepseek' } : null;
   } catch (err) {
     console.error('DeepSeek error:', err.message);

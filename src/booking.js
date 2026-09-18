@@ -175,21 +175,18 @@ export async function confirm(phone) {
   if (!session || session.step !== 'confirm') return start(phone);
   const s = session;
 
-  const available = await db.isSlotAvailable(s.masterId, s.date, s.startTime, s.endTime);
-  if (!available) {
-    clearSession(phone);
-    await sendText(phone, '😔 Этот слот только что заняли. Начните запись заново.');
-    return sendMainMenu(phone);
-  }
-
-  const appt = await db.createAppointment({
-    userId: phone,
-    masterId: s.masterId,
+  const appt = await createAppointmentFor(phone, {
     serviceId: s.serviceId,
+    masterId: s.masterId,
     date: s.date,
     startTime: s.startTime,
     endTime: s.endTime,
   });
+  if (!appt) {
+    clearSession(phone);
+    await sendText(phone, '😔 Этот слот только что заняли. Начните запись заново.');
+    return sendMainMenu(phone);
+  }
 
   clearSession(phone);
 
@@ -205,19 +202,6 @@ export async function confirm(phone) {
       `До встречи! 👋`
   );
 
-  const userAppt = await db.getAppointmentById(appt.id);
-  const adminText =
-    `📩 Новая запись #${appt.id}\n\n` +
-    `👤 ${userAppt.user_name} (${phone})\n` +
-    `💅 ${s.serviceName}\n` +
-    `👩 ${s.masterName}\n` +
-    `📅 ${formatDateFull(s.date)}\n` +
-    `🕐 ${s.startTime} – ${s.endTime}\n\n` +
-    `Чтобы отменить, напишите: cancel ${appt.id}`;
-
-  for (const adminPhone of ADMIN_PHONES()) {
-    sendText(adminPhone, adminText).catch(() => {});
-  }
 }
 
 // ── Cancel-during-flow ────────────────────────────────────────────────────
@@ -317,4 +301,80 @@ export async function handleAdminCancel(phone, apptIdStr) {
   );
 
   waitlist.notifyNext(appt.master_id, String(appt.appointment_date).slice(0, 10)).catch(() => {});
+}
+
+// ── Booking core ───────────────────────────────────────────────────────────
+// The three write operations, free of any conversational wrapping, so the
+// numbered flow and the AI agent (src/aiAgent.js) create, move and cancel
+// appointments through exactly the same checks and the same admin
+// notifications. They return null/false rather than messaging the client —
+// the caller owns the wording.
+
+function notifyAdmins(text) {
+  for (const adminPhone of ADMIN_PHONES()) {
+    sendText(adminPhone, text).catch(() => {});
+  }
+}
+
+export async function createAppointmentFor(phone, { serviceId, masterId, date, startTime, endTime }) {
+  const available = await db.isSlotAvailable(masterId, date, startTime, endTime);
+  if (!available) return null;
+
+  const appt = await db.createAppointment({
+    userId: phone, masterId, serviceId, date, startTime, endTime,
+  });
+
+  const full = await db.getAppointmentById(appt.id);
+  notifyAdmins(
+    `📩 Новая запись #${appt.id}\n\n` +
+      `👤 ${full.user_name} (${phone})\n` +
+      `💅 ${full.service_name}\n` +
+      `👩 ${full.master_name}\n` +
+      `📅 ${formatDateFull(date)}\n` +
+      `🕐 ${startTime} – ${endTime}\n\n` +
+      `Чтобы отменить, напишите: cancel ${appt.id}`
+  );
+  return appt;
+}
+
+// Cancelling frees a slot, so the waitlist for that master/date is offered it.
+export async function cancelAppointmentFor(phone, apptId) {
+  const appt = await db.getAppointmentById(apptId);
+  if (!appt || appt.status !== 'confirmed' || appt.user_id !== phone) return false;
+
+  await db.cancelAppointment(apptId);
+  const date = String(appt.appointment_date).slice(0, 10);
+  notifyAdmins(
+    `❌ Клиент отменил запись #${apptId}\n\n` +
+      `👤 ${appt.user_name} (${phone})\n` +
+      `💅 ${appt.service_name}\n` +
+      `👩 ${appt.master_name}\n` +
+      `📅 ${formatDateFull(date)}\n` +
+      `🕐 ${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}`
+  );
+  waitlist.notifyNext(appt.master_id, date).catch(() => {});
+  return true;
+}
+
+// The old date is freed too, hence the second waitlist nudge.
+export async function rescheduleAppointmentFor(phone, apptId, { date, startTime, endTime }) {
+  const appt = await db.getAppointmentById(apptId);
+  if (!appt || appt.status !== 'confirmed' || appt.user_id !== phone) return null;
+
+  const free = await db.isSlotAvailable(appt.master_id, date, startTime, endTime, apptId);
+  if (!free) return null;
+
+  const oldDate = String(appt.appointment_date).slice(0, 10);
+  await db.rescheduleAppointment(apptId, { date, startTime, endTime });
+
+  notifyAdmins(
+    `🔄 Перенос записи #${apptId}\n\n` +
+      `👤 ${appt.user_name} (${phone})\n` +
+      `💅 ${appt.service_name}\n` +
+      `👩 ${appt.master_name}\n` +
+      `Было: ${formatDateFull(oldDate)} ${String(appt.start_time).slice(0, 5)}\n` +
+      `Стало: ${formatDateFull(date)} ${startTime} – ${endTime}`
+  );
+  if (oldDate !== date) waitlist.notifyNext(appt.master_id, oldDate).catch(() => {});
+  return await db.getAppointmentById(apptId);
 }

@@ -212,11 +212,29 @@ export const db = {
     console.log('Database ready');
   },
 
+  // name is COALESCEd so a message that arrives without a WhatsApp profile
+  // name doesn't overwrite a name the client typed to the AI agent.
   async upsertUser({ id, name }) {
     await pool.query(
       `INSERT INTO users (id, name)
-       VALUES ($1,$2)
-       ON CONFLICT (id) DO UPDATE SET name=$2`,
+       VALUES ($1, COALESCE($2,$1))
+       ON CONFLICT (id) DO UPDATE SET name = COALESCE($2, users.name)`,
+      [id, name || null]
+    );
+  },
+
+  async getUser(id) {
+    const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [id]);
+    return rows[0] || null;
+  },
+
+  // Used when the client tells the AI agent their name: fills it in only
+  // while we're still calling them by their phone number, so a real WhatsApp
+  // profile name is never replaced by something misheard in chat.
+  async setUserNameIfUnknown(id, name) {
+    await pool.query(
+      `INSERT INTO users (id, name) VALUES ($1,$2)
+       ON CONFLICT (id) DO UPDATE SET name=$2 WHERE users.name = users.id`,
       [id, name]
     );
   },
