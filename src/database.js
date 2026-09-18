@@ -7,9 +7,15 @@ const { Pool } = pg;
 // and breaks that everywhere it's re-stringified.
 pg.types.setTypeParser(1082, val => val);
 
+// SSL only when the URL asks for it. On the VPS Postgres is a compose
+// service with no `ports:`, reachable only on the private network and not
+// speaking TLS at all — assuming SSL for every non-localhost host made every
+// salon crash-loop with "The server does not support SSL connections".
+const wantsSsl = /[?&]sslmode=(require|verify-ca|verify-full)\b/.test(process.env.DATABASE_URL || '');
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false },
+  ssl: wantsSsl ? { rejectUnauthorized: false } : false,
 });
 
 const TZ = process.env.TIMEZONE || 'Europe/Moscow';
