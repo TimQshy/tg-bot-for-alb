@@ -253,6 +253,8 @@ h1,h2,h3{margin:0;font-weight:600}
       <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Записи</button>
     <button class="snav" data-goto="uslugi" aria-selected="false">
       <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Услуги</button>
+    <button class="snav" data-goto="mastera" aria-selected="false">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>Мастера</button>
     <button class="snav" data-goto="chasy" aria-selected="false">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Часы работы</button>
     <button class="snav" data-goto="whatsapp" aria-selected="false">
@@ -308,6 +310,13 @@ h1,h2,h3{margin:0;font-weight:600}
       <button class="btn btn--primary btn--block" id="addServiceBtn" style="margin-top:14px">+ Добавить услугу</button>
     </main>
 
+    <!-- ================= МАСТЕРА ================= -->
+    <main class="col screen" id="screen-mastera" hidden>
+      <div class="screen-head"><h1>Мастера</h1><p id="masteraSub"></p></div>
+      <div class="card" id="mastersCard"></div>
+      <button class="btn btn--primary btn--block" id="addMasterBtn" style="margin-top:14px">+ Добавить мастера</button>
+    </main>
+
     <!-- ================= ЧАСЫ РАБОТЫ ================= -->
     <main class="col screen" id="screen-chasy" hidden>
       <div class="screen-head"><h1>Часы работы</h1><p>Слоты для онлайн-записи считаются из этого графика</p></div>
@@ -349,6 +358,8 @@ h1,h2,h3{margin:0;font-weight:600}
     <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Записи</button>
   <button class="tab" role="tab" aria-selected="false" data-goto="uslugi">
     <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Услуги</button>
+  <button class="tab" role="tab" aria-selected="false" data-goto="mastera">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>Мастера</button>
   <button class="tab" role="tab" aria-selected="false" data-goto="chasy">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Часы</button>
   <button class="tab" role="tab" aria-selected="false" data-goto="whatsapp">
@@ -438,6 +449,26 @@ h1,h2,h3{margin:0;font-weight:600}
   <div class="sheet__foot">
     <button class="btn btn--ghost" data-close>Отмена</button>
     <button class="btn btn--primary" id="svcSubmitBtn">Сохранить</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-masteredit" hidden role="dialog" aria-modal="true" aria-labelledby="mstTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="mstTitle">Мастер</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body">
+    <label class="field"><span class="field__label">Имя</span><input class="input" id="mstName" placeholder="Айгуль"></label>
+    <label class="field"><span class="field__label">Специализация</span>
+      <input class="input" id="mstDesc" placeholder="маникюр, педикюр"></label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <button class="switch" role="switch" id="mstActive" aria-checked="true"></button>
+      <span class="field__label" style="margin:0">Принимает записи</span>
+    </label>
+    <p class="hint" id="mstHint"></p>
+  </div>
+  <div class="sheet__foot">
+    <button class="btn btn--ghost" data-close>Отмена</button>
+    <button class="btn btn--primary" id="mstSubmitBtn">Сохранить</button>
   </div>
 </div>
 
@@ -542,6 +573,7 @@ const state = {
   newAppt: { serviceId: null, masterId: null, slot: null, masters: [] },
   move: { apptId: null, masterId: null, durationMin: null, slot: null },
   svc: { id: null, masterIds: [] },
+  master: { id: null },
 };
 
 // ── Screens ────────────────────────────────────────────────────────────
@@ -553,6 +585,7 @@ function goto(name) {
   // screen — elsewhere it just sits on top of the content.
   document.getElementById('fabAdd').hidden = name !== 'zapisi';
   if (name === 'uslugi') loadServices();
+  if (name === 'mastera') loadMasters();
   if (name === 'chasy') loadHoursScreen();
   if (name === 'dostupy') loadAccess();
   name === 'whatsapp' ? startWaPolling() : stopWaPolling();
@@ -826,6 +859,12 @@ async function loadWeekCounts() {
 }
 
 // ── Filters ────────────────────────────────────────────────────────────
+// state.masters holds switched-off masters too, so they can be edited and
+// their past appointments still resolve to a name. Anywhere a master is
+// offered for *new* work, use activeMasters().
+function activeMasters() {
+  return state.masters.filter(m => m.is_active);
+}
 function masterName(id) {
   const m = state.masters.find(x => x.id === id);
   return m ? m.name : '';
@@ -838,6 +877,16 @@ function renderFilterChips() {
   document.getElementById('chipStatus').firstChild.textContent = STATUS_LABEL[state.filterStatus] + ' ';
   document.getElementById('chipDate').firstChild.textContent =
     (state.date === todayISO() ? 'Другая дата' : fmtDayShort(state.date)) + ' ';
+}
+
+// The master filter only offers masters who still take bookings; a
+// switched-off one keeps its past appointments, which stay visible under
+// "Все мастера".
+function renderMasterFilterList() {
+  document.getElementById('sheetMasterList').innerHTML =
+    '<button class="row" data-master-id=""><span class="row__main"><span class="row__title">Все мастера</span></span></button>' +
+    activeMasters().map(m =>
+      `<button class="row" data-master-id="${m.id}"><span class="row__main"><span class="row__title">${escapeHtml(m.name)}</span></span></button>`).join('');
 }
 
 document.getElementById('sheetMasterList').addEventListener('click', e => {
@@ -1161,7 +1210,7 @@ async function openServiceSheet(id) {
     document.getElementById('svcActive').setAttribute('aria-checked', 'true');
     state.svc = { id: null, masterIds: [] };
   }
-  document.getElementById('svcMasterChips').innerHTML = state.masters.map(m =>
+  document.getElementById('svcMasterChips').innerHTML = activeMasters().map(m =>
     `<button class="chip${state.svc.masterIds.includes(m.id) ? ' chip--on' : ''}" data-master-id="${m.id}">${escapeHtml(m.name)}</button>`).join('');
   openSheet('sheet-service');
 }
@@ -1194,12 +1243,62 @@ document.getElementById('svcSubmitBtn').addEventListener('click', async () => {
   } catch { hint.textContent = 'Не получилось сохранить'; }
 });
 
+// ── Мастера ───────────────────────────────────────────────────────────
+async function loadMasters() {
+  state.masters = await api('/api/masters');
+  const active = activeMasters().length;
+  document.getElementById('masteraSub').textContent =
+    `${active} принимают записи${state.masters.length > active ? `, ${state.masters.length - active} отключены` : ''}`;
+  document.getElementById('mastersCard').innerHTML = state.masters.map(m => `
+    <button class="row" data-edit-master="${m.id}">
+      <span class="row__main">
+        <span class="row__title">${escapeHtml(m.name)}${m.is_active ? '' : ' (отключён)'}</span>
+        ${m.description ? `<span class="row__sub">${escapeHtml(m.description)}</span>` : ''}
+      </span>
+      <svg class="row__chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+    </button>`).join('') || '<div class="row"><span class="row__main">Мастеров пока нет</span></div>';
+  document.getElementById('mastersCard').querySelectorAll('[data-edit-master]').forEach(b =>
+    b.addEventListener('click', () => openMasterSheet(Number(b.dataset.editMaster))));
+}
+function openMasterSheet(id) {
+  const m = id ? state.masters.find(x => x.id === id) : null;
+  state.master = { id: m ? m.id : null };
+  document.getElementById('mstTitle').textContent = m ? 'Мастер' : 'Новый мастер';
+  document.getElementById('mstName').value = m ? m.name : '';
+  document.getElementById('mstDesc').value = m && m.description ? m.description : '';
+  document.getElementById('mstActive').setAttribute('aria-checked', String(m ? !!m.is_active : true));
+  document.getElementById('mstHint').textContent = '';
+  openSheet('sheet-masteredit');
+}
+document.getElementById('addMasterBtn').addEventListener('click', () => openMasterSheet(null));
+document.getElementById('mstActive').addEventListener('click', function () {
+  this.setAttribute('aria-checked', String(this.getAttribute('aria-checked') !== 'true'));
+});
+document.getElementById('mstSubmitBtn').addEventListener('click', async () => {
+  const name = document.getElementById('mstName').value.trim();
+  const description = document.getElementById('mstDesc').value.trim();
+  const is_active = document.getElementById('mstActive').getAttribute('aria-checked') === 'true';
+  const hint = document.getElementById('mstHint');
+  if (!name) { hint.textContent = 'Введите имя'; return; }
+  try {
+    if (state.master.id) {
+      await api(`/api/masters/${state.master.id}`, { method: 'PUT', body: JSON.stringify({ name, description, is_active }) });
+    } else {
+      await api('/api/masters', { method: 'POST', body: JSON.stringify({ name, description }) });
+    }
+    closeSheet(); toast('Сохранено');
+    await loadMasters();
+    renderMasterFilterList();
+  } catch { hint.textContent = 'Не получилось сохранить'; }
+});
+
 // ── Часы работы ───────────────────────────────────────────────────────
 const DAY_NAMES_SHORT = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 async function loadHoursScreen() {
-  if (!state.hoursMasterId && state.masters.length) state.hoursMasterId = state.masters[0].id;
+  const masters = activeMasters();
+  if (!state.hoursMasterId && masters.length) state.hoursMasterId = masters[0].id;
   const chips = document.getElementById('hoursMasterChips');
-  chips.innerHTML = state.masters.map(m =>
+  chips.innerHTML = masters.map(m =>
     `<button class="chip${m.id === state.hoursMasterId ? ' chip--on' : ''}" data-master-id="${m.id}">${escapeHtml(m.name)}</button>`).join('');
   await renderHoursCard();
 }
@@ -1339,9 +1438,7 @@ async function initAuth() {
 
   try {
     state.masters = await api('/api/masters');
-    document.getElementById('sheetMasterList').innerHTML =
-      '<button class="row" data-master-id=""><span class="row__main"><span class="row__title">Все мастера</span></span></button>' +
-      state.masters.map(m => `<button class="row" data-master-id="${m.id}"><span class="row__main"><span class="row__title">${escapeHtml(m.name)}</span></span></button>`).join('');
+    renderMasterFilterList();
     state.services = await api('/api/services');
     renderDayStrip();
     await Promise.all([loadAppointments(), loadWeekCounts()]);

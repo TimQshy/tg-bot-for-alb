@@ -228,9 +228,30 @@ adminRouter.put('/api/ig-replies', async (req, res) => {
   res.json(await db.getIgReplies());
 });
 
-// ── Masters (read-only, for dropdowns) ───────────────────────────────────
+// ── Masters ───────────────────────────────────────────────────────────────
+// Masters are never deleted, only switched off: appointments reference them,
+// and so do the working hours the salon spent time filling in.
 adminRouter.get('/api/masters', async (_req, res) => {
-  res.json(await db.getAllMasters());
+  res.json(await db.listMasters());
+});
+
+adminRouter.post('/api/masters', async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'missing_fields' });
+  res.json(await db.createMaster({ name, description: req.body?.description }));
+});
+
+adminRouter.put('/api/masters/:id', async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'missing_fields' });
+
+  const master = await db.updateMaster(req.params.id, {
+    name,
+    description: req.body?.description,
+    isActive: req.body?.is_active !== false,
+  });
+  if (!master) return res.status(404).json({ error: 'not_found' });
+  res.json(master);
 });
 
 // ── Working hours ─────────────────────────────────────────────────────────

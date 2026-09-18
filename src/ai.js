@@ -6,7 +6,7 @@ import { db } from './database.js';
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 
 async function buildSystemPrompt() {
-  const [services, masters] = await Promise.all([db.getActiveServices(), db.getAllMasters()]);
+  const [services, masters] = await Promise.all([db.getActiveServices(), db.getActiveMasters()]);
 
   const servicesText = services
     .map(s => `- ${s.name}: ${s.price} сом, ${s.duration_minutes} мин`)

@@ -320,10 +320,37 @@ export const db = {
     return rows;
   },
 
-  // ── Admin: masters (read-only list for dropdowns) ───────────────────────
-  async getAllMasters() {
+  // ── Admin: masters CRUD ─────────────────────────────────────────────────
+  // Inactive masters are listed too: they still own past appointments and a
+  // working-hours template, and the panel needs to be able to switch one
+  // back on. Callers that offer a master for *new* work filter on is_active.
+  async listMasters() {
+    const { rows } = await pool.query(
+      'SELECT * FROM masters ORDER BY is_active DESC, name'
+    );
+    return rows;
+  },
+
+  async getActiveMasters() {
     const { rows } = await pool.query('SELECT * FROM masters WHERE is_active=true ORDER BY name');
     return rows;
+  },
+
+  async createMaster({ name, description }) {
+    const { rows } = await pool.query(
+      `INSERT INTO masters (name, description) VALUES ($1,$2) RETURNING *`,
+      [name, description || null]
+    );
+    return rows[0];
+  },
+
+  async updateMaster(id, { name, description, isActive }) {
+    const { rows } = await pool.query(
+      `UPDATE masters SET name=$2, description=$3, is_active=$4
+       WHERE id=$1 RETURNING *`,
+      [id, name, description || null, isActive]
+    );
+    return rows[0];
   },
 
   // ── Admin: services CRUD ─────────────────────────────────────────────────
