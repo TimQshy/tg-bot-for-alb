@@ -14,6 +14,24 @@ let sock = null;
 let latestQrDataUrl = null;
 let connectionStatus = 'connecting'; // 'connecting' | 'open' | 'closed'
 
+// Ids of messages this process sent. Everything the linked account sends
+// echoes back through messages.upsert with fromMe=true — the bot's own
+// sends included — so this set is what tells "the admin typed this on their
+// phone" apart from "we just sent this ourselves". Bounded: only the last
+// few hundred matter, an echo arrives within seconds of the send.
+const botSentIds = new Set();
+const SENT_IDS_MAX = 500;
+// A fromMe echo older than this is history replay, not a live reply.
+const HUMAN_ECHO_MAX_AGE_MS = 2 * 60 * 1000;
+
+function rememberSentId(id) {
+  botSentIds.add(id);
+  if (botSentIds.size > SENT_IDS_MAX) {
+    const oldest = botSentIds.values();
+    for (let i = 0; i < SENT_IDS_MAX / 5; i++) botSentIds.delete(oldest.next().value);
+  }
+}
+
 function toJid(phone) {
   return phone.includes('@') ? phone : `${phone}@s.whatsapp.net`;
 }
@@ -34,14 +52,17 @@ export async function sendText(to, text) {
     return;
   }
   try {
-    await sock.sendMessage(toJid(to), { text });
+    const sent = await sock.sendMessage(toJid(to), { text });
+    if (sent?.key?.id) rememberSentId(sent.key.id);
   } catch (err) {
     console.error('WhatsApp send error:', err);
   }
 }
 
-// onIncoming(phone, { text, profileName })
-export async function connectWhatsApp(onIncoming) {
+// onIncoming(phone, { text, profileName }) — a client wrote to us.
+// onHumanReply(phone, { text })  — someone answered that client by hand from
+// one of the account's own devices (see the fromMe branch below).
+export async function connectWhatsApp(onIncoming, onHumanReply = async () => {}) {
   const { state, saveCreds } = await useDbAuthState();
   const { version } = await fetchLatestBaileysVersion();
 
@@ -82,7 +103,7 @@ export async function connectWhatsApp(onIncoming) {
       }
 
       console.log('WhatsApp: connection closed, reconnecting…', statusCode || '');
-      connectWhatsApp(onIncoming).catch(err => console.error('WhatsApp reconnect failed:', err));
+      connectWhatsApp(onIncoming, onHumanReply).catch(err => console.error('WhatsApp reconnect failed:', err));
     }
   });
 
@@ -90,7 +111,6 @@ export async function connectWhatsApp(onIncoming) {
     if (type !== 'notify') return;
 
     for (const m of messages) {
-      if (m.key.fromMe) continue;
       const jid = m.key.remoteJid;
       if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') continue;
 
@@ -103,6 +123,23 @@ export async function connectWhatsApp(onIncoming) {
       const phone = fromJid(pnJid || jid);
 
       const text = m.message?.conversation || m.message?.extendedTextMessage?.text || null;
+
+      if (m.key.fromMe) {
+        // Our own send echoing back — ignore.
+        if (botSentIds.has(m.key.id)) continue;
+        // On reconnect WhatsApp can replay recent messages; an old echo must
+        // not re-trigger a takeover long after the fact (and after a restart
+        // botSentIds is empty, so even our own sends would look human).
+        const ageMs = Date.now() - Number(m.messageTimestamp || 0) * 1000;
+        if (ageMs > HUMAN_ECHO_MAX_AGE_MS) continue;
+
+        try {
+          await onHumanReply(phone, { text });
+        } catch (err) {
+          console.error('Human reply handling error:', err);
+        }
+        continue;
+      }
 
       try {
         await onIncoming(phone, { text, profileName: m.pushName || undefined });

@@ -97,6 +97,13 @@ CREATE INDEX IF NOT EXISTS idx_override_master_date ON schedule_override(master_
 -- haircut on a 30-minute step wastes 10 minutes of every gap.
 ALTER TABLE services ADD COLUMN IF NOT EXISTS slot_step_minutes INTEGER NOT NULL DEFAULT 30;
 
+-- Human takeover: while this is in the future the bot stays silent in that
+-- chat, so an admin answering the client by hand isn't talked over by the
+-- FSM. Set from whatsapp.js when an outgoing message appears that the bot
+-- itself didn't send. A column rather than an in-memory map so a redeploy
+-- mid-conversation doesn't wake the bot back up.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_paused_until TIMESTAMPTZ;
+
 -- One-shot carry-over from the single-interval working_hours table. Guarded
 -- on the template being empty rather than ON CONFLICT, or a day the salon
 -- has since switched off would come back on the next boot.
@@ -212,6 +219,31 @@ export const db = {
        ON CONFLICT (id) DO UPDATE SET name=$2`,
       [id, name]
     );
+  },
+
+  // ── Human takeover ────────────────────────────────────────────────────────
+  // Upsert rather than UPDATE: the admin may well answer a number that has
+  // never written to the bot, so there's no users row yet. name is only set
+  // on insert — an existing profile name must not be clobbered with digits.
+  async pauseBot(phone, minutes) {
+    await pool.query(
+      `INSERT INTO users (id, name, bot_paused_until)
+       VALUES ($1, $1, NOW() + make_interval(mins => $2))
+       ON CONFLICT (id) DO UPDATE SET bot_paused_until = EXCLUDED.bot_paused_until`,
+      [phone, minutes]
+    );
+  },
+
+  async resumeBot(phone) {
+    await pool.query('UPDATE users SET bot_paused_until = NULL WHERE id=$1', [phone]);
+  },
+
+  async isBotPaused(phone) {
+    const { rows } = await pool.query(
+      'SELECT bot_paused_until > NOW() AS paused FROM users WHERE id=$1',
+      [phone]
+    );
+    return rows[0]?.paused === true;
   },
 
   // ── Services ─────────────────────────────────────────────────────────────

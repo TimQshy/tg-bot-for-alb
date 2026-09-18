@@ -13,6 +13,11 @@ import { instagramRouter, instagramEnabled } from './instagram.js';
 import { askAI } from './ai.js';
 
 const GREETING_WORDS = ['старт', 'start', 'меню', 'menu', 'привет', 'hi', 'hello'];
+// How long the bot keeps quiet in a chat after a human answered there.
+const TAKEOVER_MINUTES = Number(process.env.HUMAN_TAKEOVER_MINUTES || 180);
+// Typed by the admin in the client's chat to hand the conversation back
+// early. The client sees it too, so keep it something innocuous-looking.
+const RESUME_COMMAND = '#bot';
 const ADMIN_PHONES = () => (process.env.ADMIN_PHONES || '').split(',').map(s => s.trim()).filter(Boolean);
 
 export const app = express();
@@ -70,6 +75,13 @@ export async function handleIncoming(phone, { text, profileName }) {
     return booking.handleAdminCancel(phone, cancelMatch[1]);
   }
 
+  // An admin is handling this chat by hand — stay out of it. Still logged
+  // above, so the panel and the FAQ analysis see the whole conversation.
+  if (await db.isBotPaused(phone)) {
+    console.log(`[takeover] bot silent for ${phone}`);
+    return;
+  }
+
   const replyId = resolveMenuReply(phone, text);
 
   if (replyId === 'book') return booking.start(phone);
@@ -125,4 +137,30 @@ export async function handleIncoming(phone, { text, profileName }) {
     }
   }
   return booking.sendMainMenu(phone);
+}
+
+// ── Human takeover — called by whatsapp.js when a message goes out to a
+// client that this process didn't send, i.e. an admin typed it on one of the
+// account's own devices. Pauses the bot in that chat so the two don't talk
+// over each other; the pause lapses on its own after TAKEOVER_MINUTES, or
+// immediately if the admin types RESUME_COMMAND there.
+export async function handleHumanReply(phone, { text }) {
+  // Logged so the panel shows the admin's own replies in the thread too.
+  // No upsertUser here — pauseBot creates the row if it's missing, without
+  // overwriting an existing name with the phone number.
+  db.logMessage({ phone, direction: 'out', text }).catch(() => {});
+
+  if ((text || '').trim().toLowerCase() === RESUME_COMMAND) {
+    await db.resumeBot(phone);
+    console.log(`[takeover] bot resumed for ${phone}`);
+    return;
+  }
+
+  await db.pauseBot(phone, TAKEOVER_MINUTES);
+  // Whatever half-finished booking the client had is stale now — the admin
+  // is arranging it in words. Leaving the FSM armed would have the bot
+  // answer a bare "2" hours later as a menu choice.
+  clearSession(phone);
+  clearLastMenu(phone);
+  console.log(`[takeover] admin replied to ${phone}, bot paused for ${TAKEOVER_MINUTES}m`);
 }

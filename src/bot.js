@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { db } from './database.js';
-import { app, handleIncoming } from './webhook.js';
+import { app, handleIncoming, handleHumanReply } from './webhook.js';
 import { startScheduler } from './scheduler.js';
 import { connectWhatsApp } from './whatsapp.js';
 
@@ -12,7 +12,7 @@ if (missing.length) {
 }
 
 await db.init();
-await connectWhatsApp(handleIncoming);
+await connectWhatsApp(handleIncoming, handleHumanReply);
 startScheduler();
 
 const PORT = process.env.PORT || 3000;
