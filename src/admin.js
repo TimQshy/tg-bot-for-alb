@@ -2,6 +2,8 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { db } from './database.js';
+import { sendAddress } from './booking.js';
+import { SETTING_KEYS } from './salonInfo.js';
 import { sendText, getWaStatus } from './whatsapp.js';
 import { formatDateFull, getDayOfWeek } from './utils.js';
 import {
@@ -257,6 +259,25 @@ adminRouter.delete('/api/services/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Salon settings (address & co) ─────────────────────────────────────────
+// Only the keys the bot knows how to use are stored, so the panel can't turn
+// this into a dumping ground.
+adminRouter.get('/api/settings', async (_req, res) => {
+  const values = await db.getSettings();
+  res.json(Object.fromEntries(SETTING_KEYS.map(k => [k, values[k] || ''])));
+});
+
+adminRouter.put('/api/settings', async (req, res) => {
+  const body = req.body || {};
+  const values = {};
+  for (const key of SETTING_KEYS) {
+    if (!(key in body)) continue;
+    if (typeof body[key] !== 'string') return res.status(400).json({ error: 'bad_value' });
+    values[key] = body[key].slice(0, 500);
+  }
+  res.json(await db.setSettings(values));
+});
+
 // ── Instagram auto-replies ────────────────────────────────────────────────
 // The whole list is saved at once: order decides which keyword wins, so
 // editing rows one by one would need a separate reorder call anyway.
@@ -481,7 +502,7 @@ adminRouter.post('/api/appointments', async (req, res) => {
     cleanPhone,
     `✅ Вас записали\n\n💅 ${appt.service_name}\n👩 ${appt.master_name}\n` +
       `📅 ${formatDateFull(date)}\n🕐 ${startTime} – ${endTime}`
-  ).catch(() => {});
+  ).then(() => sendAddress(cleanPhone)).catch(() => {});
 
   res.json(appt);
 });

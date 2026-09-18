@@ -5,6 +5,7 @@ import { getSession, setSession, clearSession } from './session.js';
 import { formatDateShort, formatDateFull, formatPrice } from './utils.js';
 import { getAvailableDates, getFreeSlotsForService } from './schedule.js';
 import * as waitlist from './waitlist.js';
+import { addressMessage } from './salonInfo.js';
 
 const SLOTS_PAGE_SIZE = 9;
 const MENU_PAGE_SIZE = 9; // + 1 row for "ещё", matches old MAX_LIST_ROWS-1 budget
@@ -207,6 +208,14 @@ export async function confirm(phone) {
       `До встречи! 👋`
   );
 
+  await sendAddress(phone);
+}
+
+// Sent as its own message after a booking is confirmed, so the client can
+// forward or pin just the address. Silent when the salon hasn't set one.
+export async function sendAddress(phone) {
+  const text = await addressMessage();
+  if (text) await sendText(phone, text).catch(() => {});
 }
 
 // ── Cancel-during-flow ────────────────────────────────────────────────────

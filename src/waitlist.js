@@ -7,7 +7,7 @@ import { sendMenu } from './menu.js';
 import { getSession, clearSession } from './session.js';
 import { formatDateFull } from './utils.js';
 import { getFreeSlotsForService } from './schedule.js';
-import { sendMainMenu } from './booking.js';
+import { sendAddress, sendMainMenu } from './booking.js';
 
 const ADMIN_PHONES = () => (process.env.ADMIN_PHONES || '').split(',').map(s => s.trim()).filter(Boolean);
 
@@ -93,6 +93,7 @@ export async function handleOfferConfirm(phone, idStr) {
       `🕐 ${String(entry.offered_start_time).slice(0, 5)} – ${String(entry.offered_end_time).slice(0, 5)}\n\n` +
       `📋 Номер записи: #${appt.id}`
   );
+  await sendAddress(phone);
 
   for (const adminPhone of ADMIN_PHONES()) {
     sendText(

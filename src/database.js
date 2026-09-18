@@ -206,6 +206,16 @@ CREATE TABLE IF NOT EXISTS ig_events (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Salon-level text the owner edits in the panel and the bot quotes verbatim:
+-- the address, how to find the door, a map link. Key/value because these are
+-- free-form strings with no behaviour attached — a missing row means the bot
+-- simply doesn't mention it.
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Long-lived Instagram tokens expire after 60 days and are refreshed in
 -- place, so they cannot live in the environment.
 CREATE TABLE IF NOT EXISTS ig_config (
@@ -781,6 +791,30 @@ export const db = {
 
   async pruneIgEvents() {
     await pool.query("DELETE FROM ig_events WHERE created_at < NOW() - interval '30 days'");
+  },
+
+  // ── Salon settings ────────────────────────────────────────────────────────
+  async getSettings() {
+    const { rows } = await pool.query('SELECT key, value FROM settings');
+    return Object.fromEntries(rows.map(r => [r.key, r.value]));
+  },
+
+  // An empty string deletes the row: "no address set" and "address set to
+  // nothing" are the same thing to everyone reading it.
+  async setSettings(values) {
+    for (const [key, raw] of Object.entries(values)) {
+      const value = typeof raw === 'string' ? raw.trim() : '';
+      if (!value) {
+        await pool.query('DELETE FROM settings WHERE key=$1', [key]);
+        continue;
+      }
+      await pool.query(
+        `INSERT INTO settings (key, value, updated_at) VALUES ($1,$2,NOW())
+         ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()`,
+        [key, value]
+      );
+    }
+    return this.getSettings();
   },
 
   async getIgConfig(key) {

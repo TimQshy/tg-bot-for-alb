@@ -15,6 +15,7 @@ import {
   cancelAppointmentFor,
   rescheduleAppointmentFor,
 } from './booking.js';
+import { addressMessage, getSalonInfo } from './salonInfo.js';
 import {
   todayStr, addDays, formatDateFull, formatPrice,
   toMinutes, toTimeString, DAYS_FULL_EXPORT, getDayOfWeek,
@@ -56,6 +57,23 @@ function pushHistory(phone, messages) {
 
 export function clearHistory(phone) {
   histories.delete(phone);
+  followUps.delete(phone);
+}
+
+// Messages the tools want sent after the model's own reply — the address
+// block once a booking is made. Queued rather than sent from inside the tool
+// so they land after the confirmation the client is reading, not before it.
+const followUps = new Map();
+
+function queueFollowUp(phone, text) {
+  if (!text) return;
+  followUps.set(phone, [...(followUps.get(phone) || []), text]);
+}
+
+export function takeFollowUps(phone) {
+  const queued = followUps.get(phone) || [];
+  followUps.delete(phone);
+  return queued;
 }
 
 // ── Prompt ─────────────────────────────────────────────────────────────────
@@ -74,11 +92,12 @@ function calendarText() {
 }
 
 async function buildSystemPrompt(phone) {
-  const [services, masters, appts, user] = await Promise.all([
+  const [services, masters, appts, user, salon] = await Promise.all([
     db.getActiveServices(),
     db.getActiveMasters(),
     db.getUserAppointments(phone),
     db.getUser(phone),
+    getSalonInfo(),
   ]);
 
   // Which master does which service — the agent needs it to pick a master_id
@@ -140,13 +159,17 @@ async function buildSystemPrompt(phone) {
 2. Перед create_booking у тебя должны быть: услуга, мастер, дата, время — и явное согласие клиента на это время. Если мастер клиенту не важен, выбери любого, у кого есть это время, и назови его имя.
 3. Если названного времени нет — так и скажи, что занято, и сразу предложи 2–3 ближайших свободных варианта.
 4. Перед reschedule_booking и cancel_booking убедись, о какой именно записи речь (если их несколько — уточни или покажи список через list_my_bookings).
-5. После успешной записи/переноса/отмены подтверди одним коротким сообщением с датой, временем, мастером и номером записи (#id).
+5. После успешной записи/переноса/отмены подтверди одним коротким сообщением с датой, временем, мастером и номером записи (#id). Адрес после записи бот отправляет сам отдельным сообщением — не дублируй его в подтверждении.
 6. Если клиент не знает имени, спроси его имя ДО записи и передай в create_booking параметром client_name${knownName ? ' (сейчас клиент записан как «' + knownName + '» — переспрашивать не надо)' : ''}.
 7. Вопросы не про салон (услуги, цены, мастера, запись) — вежливо скажи, что помогаешь только с этим.
 8. Работаешь с датами не дальше чем на ${HORIZON_DAYS} дней вперёд. Прошедшие даты не предлагай.
 9. У некоторых услуг есть ограничения (окно начала, занятость мастера на весь день) — они указаны в списке услуг. Если клиент просит время вне окна, объясни правило простыми словами («сложное окрашивание длится долго, поэтому начинаем только утром») и предложи подходящие варианты из check_availability.
 
-КАЛЕНДАРЬ (сегодня ${todayStr()})
+${salon.address ? `САЛОН
+Адрес: ${salon.address}${salon.address_note ? `\nКак найти: ${salon.address_note}` : ''}${salon.map_url ? `\nКарта: ${salon.map_url}` : ''}
+Если клиент спрашивает, где вы находитесь или как добраться — отвечай этими данными и ничего не добавляй от себя.
+
+` : ''}КАЛЕНДАРЬ (сегодня ${todayStr()})
 ${calendarText()}
 
 УСЛУГИ
@@ -361,6 +384,8 @@ async function toolCreateBooking(phone, { service_id, master_id, date, start_tim
     endTime: slot.end,
   });
   if (!appt) return { error: 'Это время только что заняли, предложи другое' };
+
+  queueFollowUp(phone, await addressMessage());
 
   return {
     ok: true,

@@ -67,6 +67,13 @@ mock.module('./database.js', {
   },
 });
 
+mock.module('./salonInfo.js', {
+  namedExports: {
+    getSalonInfo: async () => ({ address: 'ул. Киевская 95', address_note: 'вход со двора', map_url: '' }),
+    addressMessage: async () => '📍 Адрес: ул. Киевская 95\nвход со двора',
+  },
+});
+
 mock.module('./schedule.js', {
   namedExports: {
     getFreeSlotsForService: async (_service, _masterId, _date, opts = {}) =>
@@ -91,7 +98,7 @@ mock.module('./booking.js', {
   },
 });
 
-const { runAgent, clearHistory } = await import('./aiAgent.js');
+const { runAgent, clearHistory, takeFollowUps } = await import('./aiAgent.js');
 
 const toolCall = (name, args) => ({
   role: 'assistant',
@@ -141,6 +148,30 @@ test('запись создаётся на реальный слот, конец
     phone: CLIENT, serviceId: SERVICE.id, masterId: MASTER.id,
     date: DATE, startTime: '15:00', endTime: '16:00',
   });
+});
+
+test('после записи адрес уходит отдельным сообщением', async () => {
+  replies = [
+    toolCall('create_booking', {
+      service_id: SERVICE.id, master_id: MASTER.id, date: DATE, start_time: '10:00',
+    }),
+    answer('Записала на 10:00, #101.'),
+  ];
+
+  await runAgent(CLIENT, 'давайте на 10');
+  assert.deepEqual(takeFollowUps(CLIENT), ['📍 Адрес: ул. Киевская 95\nвход со двора']);
+  // Очередь одноразовая: второй вызов уже пустой.
+  assert.deepEqual(takeFollowUps(CLIENT), []);
+});
+
+test('без записи адрес не отправляется', async () => {
+  replies = [
+    toolCall('check_availability', { date: DATE, service_id: SERVICE.id }),
+    answer('Свободно 10:00 и 15:00.'),
+  ];
+
+  await runAgent(CLIENT, 'что свободно?');
+  assert.deepEqual(takeFollowUps(CLIENT), []);
 });
 
 test('придуманное время не становится записью', async () => {

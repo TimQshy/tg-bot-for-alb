@@ -312,6 +312,8 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>Мастера</button>
     <button class="snav" data-goto="chasy" aria-selected="false">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Часы работы</button>
+    <button class="snav" data-goto="salon" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Салон</button>
     <button class="snav" data-goto="whatsapp" aria-selected="false">
       <svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-5.9A8.5 8.5 0 1 1 21 11.5z"/></svg>WhatsApp</button>
     <button class="snav" data-goto="dostupy" aria-selected="false">
@@ -402,6 +404,24 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       </div>
     </main>
 
+    <!-- ================= САЛОН ================= -->
+    <main class="col screen" id="screen-salon" hidden>
+      <div class="screen-head"><h1>Салон</h1><p>Это отправляется клиенту сразу после подтверждения записи</p></div>
+      <div class="card" style="padding:16px">
+        <label class="field"><span class="field__label">Адрес</span>
+          <input class="input" id="setAddress" placeholder="г. Бишкек, ул. Киевская 95, 2 этаж"></label>
+        <label class="field"><span class="field__label">Как найти</span>
+          <input class="input" id="setAddressNote" placeholder="вход со двора, домофон 12, ориентир — аптека"></label>
+        <label class="field"><span class="field__label">Ссылка на карту</span>
+          <input class="input" id="setMapUrl" placeholder="https://go.2gis.com/..."></label>
+        <p class="hint">Пусто — бот просто не будет писать адрес. Заполните — он уйдёт отдельным сообщением после каждой записи: и через бота, и через консультанта, и когда запись создаёте вы сами.</p>
+        <button class="btn btn--primary btn--block" id="setSaveBtn" style="margin-top:14px">Сохранить</button>
+        <p class="hint" id="setMsg"></p>
+      </div>
+      <h2 class="subhead">Как это увидит клиент</h2>
+      <div class="card" style="padding:16px"><pre id="setPreview" style="margin:0;white-space:pre-wrap;font:inherit"></pre></div>
+    </main>
+
     <!-- ================= WHATSAPP ================= -->
     <main class="col screen" id="screen-whatsapp" hidden>
       <div class="screen-head"><h1>WhatsApp</h1><p>Номер салона подключается как связанное устройство</p></div>
@@ -440,6 +460,8 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
     <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>Мастера</button>
   <button class="tab" role="tab" aria-selected="false" data-goto="chasy">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Часы</button>
+  <button class="tab" role="tab" aria-selected="false" data-goto="salon">
+    <svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Салон</button>
   <button class="tab" role="tab" aria-selected="false" data-goto="whatsapp">
     <svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-5.9A8.5 8.5 0 1 1 21 11.5z"/></svg>WhatsApp</button>
   <button class="tab" role="tab" aria-selected="false" data-goto="dostupy">
@@ -756,9 +778,44 @@ function goto(name) {
   if (name === 'mastera') loadMasters();
   if (name === 'chasy') loadHoursScreen();
   if (name === 'dostupy') loadAccess();
+  if (name === 'salon') loadSettings();
   name === 'whatsapp' ? startWaPolling() : stopWaPolling();
 }
 document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => goto(b.dataset.goto)));
+
+// ── Salon settings ─────────────────────────────────────────────────────
+// The preview is the exact string the bot sends, built by the same rules as
+// salonInfo.addressMessage() — an empty address means no message at all.
+function renderSettingsPreview() {
+  const address = document.getElementById('setAddress').value.trim();
+  const note = document.getElementById('setAddressNote').value.trim();
+  const map = document.getElementById('setMapUrl').value.trim();
+  document.getElementById('setPreview').textContent = address
+    ? ['📍 Адрес: ' + address, note, map].filter(Boolean).join('\n')
+    : 'Адрес не заполнен — после записи бот ничего не отправит.';
+}
+async function loadSettings() {
+  const s = await api('/api/settings');
+  document.getElementById('setAddress').value = s.address || '';
+  document.getElementById('setAddressNote').value = s.address_note || '';
+  document.getElementById('setMapUrl').value = s.map_url || '';
+  document.getElementById('setMsg').textContent = '';
+  renderSettingsPreview();
+}
+['setAddress', 'setAddressNote', 'setMapUrl'].forEach(id =>
+  document.getElementById(id).addEventListener('input', renderSettingsPreview));
+document.getElementById('setSaveBtn').addEventListener('click', async () => {
+  const msg = document.getElementById('setMsg');
+  try {
+    await api('/api/settings', { method: 'PUT', body: JSON.stringify({
+      address: document.getElementById('setAddress').value.trim(),
+      address_note: document.getElementById('setAddressNote').value.trim(),
+      map_url: document.getElementById('setMapUrl').value.trim(),
+    }) });
+    msg.textContent = '';
+    toast('Сохранено');
+  } catch { msg.textContent = 'Не получилось сохранить'; }
+});
 
 // ── WhatsApp pairing ───────────────────────────────────────────────────
 // The QR rotates every ~20s server-side, so the panel polls instead of

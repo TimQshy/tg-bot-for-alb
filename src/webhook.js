@@ -11,7 +11,7 @@ import * as waitlist from './waitlist.js';
 import { adminRouter } from './admin.js';
 import { instagramRouter, instagramEnabled } from './instagram.js';
 import { askAI } from './ai.js';
-import { runAgent, agentEnabled, clearHistory } from './aiAgent.js';
+import { runAgent, agentEnabled, clearHistory, takeFollowUps } from './aiAgent.js';
 
 const GREETING_WORDS = ['старт', 'start', 'меню', 'menu', 'привет', 'hi', 'hello'];
 // How long the bot keeps quiet in a chat after a human answered there.
@@ -139,7 +139,11 @@ export async function handleIncoming(phone, { text, profileName }) {
     const answer = await runAgent(phone, trimmed);
     if (answer) {
       console.log(`[agent] replied to ${phone}`);
-      return sendText(phone, answer);
+      await sendText(phone, answer);
+      // The address block after a booking — sent after the reply so it reads
+      // as a follow-up, not as a preamble.
+      for (const extra of takeFollowUps(phone)) await sendText(phone, extra);
+      return;
     }
   } else {
     const result = await askAI(trimmed);
