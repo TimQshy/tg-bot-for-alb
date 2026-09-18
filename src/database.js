@@ -425,6 +425,25 @@ export const db = {
     return rows[0];
   },
 
+  // Deleting is only offered while nothing points at the row. Appointments
+  // and waitlist entries keep a hard reference: dropping a master who has
+  // ever been booked would take the history of those bookings with it, so
+  // such a master can only be switched off. Working hours, the weekly
+  // template, per-date overrides and the service assignment all cascade.
+  async deleteMaster(id) {
+    const { rows } = await pool.query(
+      `SELECT (SELECT count(*) FROM appointments WHERE master_id=$1) AS appointments,
+              (SELECT count(*) FROM waitlist     WHERE master_id=$1) AS waitlist`,
+      [id]
+    );
+    const appointments = Number(rows[0].appointments);
+    const waiting = Number(rows[0].waitlist);
+    if (appointments || waiting) return { deleted: false, appointments, waitlist: waiting };
+
+    const { rowCount } = await pool.query('DELETE FROM masters WHERE id=$1', [id]);
+    return { deleted: rowCount > 0 };
+  },
+
   // ── Admin: services CRUD ─────────────────────────────────────────────────
   async getAllServices() {
     const { rows } = await pool.query('SELECT * FROM services ORDER BY name');
@@ -449,6 +468,23 @@ export const db = {
       [id, name, description || null, durationMinutes, slotStepMinutes || 30, price, isActive]
     );
     return rows[0];
+  },
+
+  // Same rule as deleteMaster: a service that appears in an appointment or
+  // on the waitlist can only be hidden, never removed. The master
+  // assignment cascades.
+  async deleteService(id) {
+    const { rows } = await pool.query(
+      `SELECT (SELECT count(*) FROM appointments WHERE service_id=$1) AS appointments,
+              (SELECT count(*) FROM waitlist     WHERE service_id=$1) AS waitlist`,
+      [id]
+    );
+    const appointments = Number(rows[0].appointments);
+    const waiting = Number(rows[0].waitlist);
+    if (appointments || waiting) return { deleted: false, appointments, waitlist: waiting };
+
+    const { rowCount } = await pool.query('DELETE FROM services WHERE id=$1', [id]);
+    return { deleted: rowCount > 0 };
   },
 
   // ── Schedule: weekly template ────────────────────────────────────────────

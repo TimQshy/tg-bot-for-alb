@@ -203,6 +203,22 @@ adminRouter.post('/api/services', async (req, res) => {
   }));
 });
 
+// Deleting is refused as soon as anything references the row — the counts
+// go back so the panel can say what is holding it and offer to hide it
+// instead. See db.deleteService / db.deleteMaster.
+function inUseResponse(res, kind, usage) {
+  const total = usage.appointments + usage.waitlist;
+  const word = total % 10 === 1 && total % 100 !== 11 ? 'записи' : 'записей';
+  return res.status(409).json({
+    error: 'in_use',
+    appointments: usage.appointments,
+    waitlist: usage.waitlist,
+    message: kind === 'service'
+      ? `Услуга уже стоит в ${total} ${word} — её можно только скрыть, тогда история сохранится.`
+      : `Мастер уже стоит в ${total} ${word} — его можно только отключить, тогда история сохранится.`,
+  });
+}
+
 adminRouter.put('/api/services/:id', async (req, res) => {
   const { name, description, duration_minutes, slot_step_minutes, price, is_active } = req.body || {};
   if (!name || !duration_minutes || price == null) return res.status(400).json({ error: 'missing_fields' });
@@ -216,6 +232,15 @@ adminRouter.put('/api/services/:id', async (req, res) => {
       isActive: is_active !== false,
     })
   );
+});
+
+adminRouter.delete('/api/services/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!(await db.getService(id))) return res.status(404).json({ error: 'not_found' });
+
+  const result = await db.deleteService(id);
+  if (!result.deleted) return inUseResponse(res, 'service', result);
+  res.json({ ok: true });
 });
 
 // ── Instagram auto-replies ────────────────────────────────────────────────
@@ -236,8 +261,9 @@ adminRouter.put('/api/ig-replies', async (req, res) => {
 });
 
 // ── Masters ───────────────────────────────────────────────────────────────
-// Masters are never deleted, only switched off: appointments reference them,
-// and so do the working hours the salon spent time filling in.
+// A master who has never been booked can be deleted outright; once there are
+// appointments behind them, only switching them off is possible — see
+// db.deleteMaster.
 adminRouter.get('/api/masters', async (_req, res) => {
   res.json(await db.listMasters());
 });
@@ -259,6 +285,15 @@ adminRouter.put('/api/masters/:id', async (req, res) => {
   });
   if (!master) return res.status(404).json({ error: 'not_found' });
   res.json(master);
+});
+
+adminRouter.delete('/api/masters/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!(await db.getMaster(id))) return res.status(404).json({ error: 'not_found' });
+
+  const result = await db.deleteMaster(id);
+  if (!result.deleted) return inUseResponse(res, 'master', result);
+  res.json({ ok: true });
 });
 
 // ── Schedule: weekly template ─────────────────────────────────────────────

@@ -161,3 +161,52 @@ test('мастера создаются и отключаются', async () => 
   assert.equal((await call('POST', '/api/masters', { name: '  ' })).status, 400);
   assert.equal((await call('PUT', '/api/masters/999999', { name: 'Нет такого' })).status, 404);
 });
+
+test('услуга без записей удаляется, а с записями — только скрывается', async () => {
+  const fresh = await db.createService({
+    name: 'Удаляемая', durationMinutes: 30, slotStepMinutes: 30, price: 500,
+  });
+  await db.setServiceMasters(fresh.id, [masterId]);
+  assert.equal((await call('DELETE', `/api/services/${fresh.id}`)).status, 200);
+  assert.equal(await db.getService(fresh.id), undefined);
+  assert.equal((await call('DELETE', `/api/services/${fresh.id}`)).status, 404);
+
+  const booked = await db.createService({
+    name: 'Занятая', durationMinutes: 30, slotStepMinutes: 30, price: 500,
+  });
+  await db.upsertUser({ id: '996700000003', name: 'Клиент' });
+  await db.createAppointment({
+    userId: '996700000003', masterId, serviceId: booked.id,
+    date: SATURDAY, startTime: '09:00', endTime: '09:30',
+  });
+
+  const res = await call('DELETE', `/api/services/${booked.id}`);
+  assert.equal(res.status, 409);
+  assert.equal(res.body.error, 'in_use');
+  assert.equal(res.body.appointments, 1);
+  assert.ok(await db.getService(booked.id), 'услуга должна остаться');
+
+  await db.updateService(booked.id, {
+    name: 'Занятая', durationMinutes: 30, slotStepMinutes: 30, price: 500, isActive: false,
+  });
+});
+
+test('мастер без записей удаляется вместе с графиком, с записями — нет', async () => {
+  const fresh = await call('POST', '/api/masters', { name: 'Временный' });
+  await call('PUT', '/api/schedule/template', {
+    masterId: fresh.body.id, weekday: 0, isWorking: true,
+    intervals: [{ from: '10:00', to: '18:00', breaks: [] }],
+  });
+
+  assert.equal((await call('DELETE', `/api/masters/${fresh.body.id}`)).status, 200);
+  assert.equal(await db.getMaster(fresh.body.id), undefined);
+  assert.deepEqual(await db.getScheduleTemplate(fresh.body.id), [], 'график должен уйти вместе с мастером');
+  assert.equal((await call('DELETE', `/api/masters/${fresh.body.id}`)).status, 404);
+
+  // masterId уже участвует в записях из предыдущих тестов
+  const res = await call('DELETE', `/api/masters/${masterId}`);
+  assert.equal(res.status, 409);
+  assert.equal(res.body.error, 'in_use');
+  assert.ok(res.body.appointments > 0);
+  assert.ok(await db.getMaster(masterId), 'мастер должен остаться');
+});
