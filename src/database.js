@@ -64,6 +64,55 @@ CREATE TABLE IF NOT EXISTS working_hours (
   UNIQUE (master_id, day_of_week)
 );
 
+-- Two-level schedule. schedule_template is the standing week; an override
+-- replaces it outright for one date. Deleting the override — not copying
+-- the template into it — is what "back to the template" means, so a later
+-- template edit reaches that date again.
+--
+-- weekday is 0=Mon … 6=Sun, matching getDayOfWeek() in src/utils.js, not
+-- JS getDay(). intervals is
+--   [{"from":"12:00","to":"19:00","breaks":[{"from":"16:00","to":"17:00","note":"личное"}]}]
+CREATE TABLE IF NOT EXISTS schedule_template (
+  id SERIAL PRIMARY KEY,
+  master_id INTEGER NOT NULL REFERENCES masters(id) ON DELETE CASCADE,
+  weekday SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+  is_working BOOLEAN NOT NULL DEFAULT true,
+  intervals JSONB NOT NULL DEFAULT '[]'::jsonb,
+  UNIQUE (master_id, weekday)
+);
+
+CREATE TABLE IF NOT EXISTS schedule_override (
+  id SERIAL PRIMARY KEY,
+  master_id INTEGER NOT NULL REFERENCES masters(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('custom', 'dayoff')),
+  intervals JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (master_id, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_override_master_date ON schedule_override(master_id, date);
+
+-- How often a booking may start, as opposed to how long it runs: a 20-minute
+-- haircut on a 30-minute step wastes 10 minutes of every gap.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS slot_step_minutes INTEGER NOT NULL DEFAULT 30;
+
+-- One-shot carry-over from the single-interval working_hours table. Guarded
+-- on the template being empty rather than ON CONFLICT, or a day the salon
+-- has since switched off would come back on the next boot.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM schedule_template) THEN
+    INSERT INTO schedule_template (master_id, weekday, is_working, intervals)
+    SELECT master_id, day_of_week, true,
+           jsonb_build_array(jsonb_build_object(
+             'from', to_char(start_time, 'HH24:MI'),
+             'to',   to_char(end_time,   'HH24:MI'),
+             'breaks', '[]'::jsonb))
+    FROM working_hours;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS appointments (
   id SERIAL PRIMARY KEY,
   user_id TEXT REFERENCES users(id),
@@ -215,15 +264,6 @@ export const db = {
     }
   },
 
-  // ── Working hours ─────────────────────────────────────────────────────────
-  async getWorkingHours(masterId, dayOfWeek) {
-    const { rows } = await pool.query(
-      'SELECT * FROM working_hours WHERE master_id=$1 AND day_of_week=$2',
-      [masterId, dayOfWeek]
-    );
-    return rows[0];
-  },
-
   // ── Appointments ──────────────────────────────────────────────────────────
   async getBookedSlots(masterId, date, excludeApptId = null) {
     const { rows } = await pool.query(
@@ -359,46 +399,94 @@ export const db = {
     return rows;
   },
 
-  async createService({ name, description, durationMinutes, price }) {
+  async createService({ name, description, durationMinutes, slotStepMinutes, price }) {
     const { rows } = await pool.query(
-      `INSERT INTO services (name, description, duration_minutes, price)
-       VALUES ($1,$2,$3,$4) RETURNING *`,
-      [name, description || null, durationMinutes, price]
+      `INSERT INTO services (name, description, duration_minutes, slot_step_minutes, price)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [name, description || null, durationMinutes, slotStepMinutes || 30, price]
     );
     return rows[0];
   },
 
-  async updateService(id, { name, description, durationMinutes, price, isActive }) {
+  async updateService(id, { name, description, durationMinutes, slotStepMinutes, price, isActive }) {
     const { rows } = await pool.query(
-      `UPDATE services SET name=$2, description=$3, duration_minutes=$4, price=$5, is_active=$6
+      `UPDATE services
+         SET name=$2, description=$3, duration_minutes=$4, slot_step_minutes=$5,
+             price=$6, is_active=$7
        WHERE id=$1 RETURNING *`,
-      [id, name, description || null, durationMinutes, price, isActive]
+      [id, name, description || null, durationMinutes, slotStepMinutes || 30, price, isActive]
     );
     return rows[0];
   },
 
-  // ── Admin: working hours ─────────────────────────────────────────────────
-  async getWorkingHoursForMaster(masterId) {
+  // ── Schedule: weekly template ────────────────────────────────────────────
+  async getScheduleTemplate(masterId) {
     const { rows } = await pool.query(
-      'SELECT * FROM working_hours WHERE master_id=$1 ORDER BY day_of_week',
+      'SELECT * FROM schedule_template WHERE master_id=$1 ORDER BY weekday',
       [masterId]
     );
     return rows;
   },
 
-  async upsertWorkingHour(masterId, dayOfWeek, startTime, endTime) {
+  async getTemplateDay(masterId, weekday) {
     const { rows } = await pool.query(
-      `INSERT INTO working_hours (master_id, day_of_week, start_time, end_time)
-       VALUES ($1,$2,$3,$4)
-       ON CONFLICT (master_id, day_of_week) DO UPDATE SET start_time=$3, end_time=$4
+      'SELECT * FROM schedule_template WHERE master_id=$1 AND weekday=$2',
+      [masterId, weekday]
+    );
+    return rows[0] || null;
+  },
+
+  async upsertTemplateDay(masterId, weekday, isWorking, intervals) {
+    const { rows } = await pool.query(
+      `INSERT INTO schedule_template (master_id, weekday, is_working, intervals)
+       VALUES ($1,$2,$3,$4::jsonb)
+       ON CONFLICT (master_id, weekday)
+       DO UPDATE SET is_working=$3, intervals=$4::jsonb
        RETURNING *`,
-      [masterId, dayOfWeek, startTime, endTime]
+      [masterId, weekday, isWorking, JSON.stringify(intervals)]
     );
     return rows[0];
   },
 
-  async deleteWorkingHour(masterId, dayOfWeek) {
-    await pool.query('DELETE FROM working_hours WHERE master_id=$1 AND day_of_week=$2', [masterId, dayOfWeek]);
+  // ── Schedule: per-date overrides ─────────────────────────────────────────
+  async getOverride(masterId, date) {
+    const { rows } = await pool.query(
+      'SELECT * FROM schedule_override WHERE master_id=$1 AND date=$2',
+      [masterId, date]
+    );
+    return rows[0] || null;
+  },
+
+  async listOverrides(masterId, from, to) {
+    const { rows } = await pool.query(
+      `SELECT * FROM schedule_override
+       WHERE master_id=$1 AND date >= $2 AND date <= $3
+       ORDER BY date`,
+      [masterId, from, to]
+    );
+    return rows;
+  },
+
+  async upsertOverride(masterId, date, kind, intervals) {
+    const { rows } = await pool.query(
+      `INSERT INTO schedule_override (master_id, date, kind, intervals)
+       VALUES ($1,$2,$3,$4::jsonb)
+       ON CONFLICT (master_id, date)
+       DO UPDATE SET kind=$3, intervals=$4::jsonb
+       RETURNING *`,
+      [masterId, date, kind, JSON.stringify(intervals)]
+    );
+    return rows[0];
+  },
+
+  // Dropping the row is the whole of "back to the template" — see the schema
+  // comment. Never replace it with a copy of the template's hours.
+  async deleteOverride(masterId, date) {
+    const { rowCount } = await pool.query(
+      'DELETE FROM schedule_override WHERE master_id=$1 AND date=$2',
+      [masterId, date]
+    );
+    return rowCount > 0;
   },
 
   // ── Messages log (for FAQ analysis) ─────────────────────────────────────
@@ -429,7 +517,7 @@ export const db = {
   // Oldest still-waiting entry for this master/date (FIFO).
   async getNextWaiting(masterId, date) {
     const { rows } = await pool.query(
-      `SELECT w.*, s.duration_minutes
+      `SELECT w.*, s.duration_minutes, s.slot_step_minutes
        FROM waitlist w
        JOIN services s ON s.id = w.service_id
        WHERE w.master_id=$1 AND w.desired_date=$2 AND w.status='waiting'

@@ -438,6 +438,15 @@ h1,h2,h3{margin:0;font-weight:600}
       <label class="field"><span class="field__label">Длительность, мин</span><input class="input" id="svcDur" inputmode="numeric"></label>
       <label class="field"><span class="field__label">Цена, сом</span><input class="input" id="svcPrice" inputmode="numeric"></label>
     </div>
+    <div class="field">
+      <label class="field__label" for="svcStep">Шаг записи</label>
+      <select class="input" id="svcStep">
+        <option value="15">каждые 15 мин</option>
+        <option value="30">каждые 30 мин</option>
+        <option value="60">каждый час</option>
+      </select>
+      <p class="hint">Как часто может начинаться запись. Не то же самое, что длительность.</p>
+    </div>
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <button class="switch" role="switch" id="svcActive" aria-checked="true"></button>
       <span class="field__label" style="margin:0">Активна (видна в записи через WhatsApp)</span>
@@ -1083,7 +1092,7 @@ async function refreshNewSlots() {
   const date = document.getElementById('newDate').value;
   if (!serviceId || !masterId || !date) { grid.innerHTML = ''; hint.textContent = ''; return; }
   const service = state.services.find(s => s.id === serviceId);
-  const slots = await api(`/api/available-slots?masterId=${masterId}&date=${date}&durationMinutes=${service.duration_minutes}`);
+  const slots = await api(`/api/available-slots?masterId=${masterId}&date=${date}&durationMinutes=${service.duration_minutes}&stepMinutes=${service.slot_step_minutes || 30}`);
   grid.innerHTML = slots.map(s => `<button class="slot" data-start="${s.start}" data-end="${s.end}">${s.start}</button>`).join('');
   hint.textContent = slots.length ? '' : 'Нет свободных слотов на эту дату';
 }
@@ -1116,7 +1125,13 @@ document.getElementById('newSubmitBtn').addEventListener('click', async () => {
 async function openMoveSheet(apptId) {
   const appt = state.appts.find(a => String(a.id) === String(apptId));
   if (!appt) return;
-  state.move = { apptId: appt.id, masterId: appt.master_id, durationMin: toMin(appt.end_time) - toMin(appt.start_time), slot: null };
+  state.move = {
+    apptId: appt.id,
+    masterId: appt.master_id,
+    durationMin: toMin(appt.end_time) - toMin(appt.start_time),
+    stepMin: (state.services.find(s => s.id === appt.service_id) || {}).slot_step_minutes || 30,
+    slot: null,
+  };
   document.getElementById('moveCtx').innerHTML =
     `<span class="ava">${escapeHtml((appt.master_name||'?')[0]||'?')}</span>
      <span><b>${escapeHtml(appt.user_name)}</b><br><span class="old">${String(appt.appointment_date).slice(0,10)} ${fmtTime(appt.start_time)}–${fmtTime(appt.end_time)}</span></span>`;
@@ -1134,8 +1149,8 @@ async function refreshMoveSlots() {
   document.getElementById('moveSubmitBtn').disabled = true;
   const date = document.getElementById('moveDate').value;
   if (!date) return;
-  const { masterId, durationMin, apptId } = state.move;
-  const slots = await api(`/api/available-slots?masterId=${masterId}&date=${date}&durationMinutes=${durationMin}&excludeApptId=${apptId}`);
+  const { masterId, durationMin, stepMin, apptId } = state.move;
+  const slots = await api(`/api/available-slots?masterId=${masterId}&date=${date}&durationMinutes=${durationMin}&stepMinutes=${stepMin}&excludeApptId=${apptId}`);
   grid.innerHTML = slots.map(s => `<button class="slot" data-start="${s.start}" data-end="${s.end}">${s.start}</button>`).join('');
   hint.textContent = slots.length ? '' : 'Нет свободных слотов на эту дату';
 }
@@ -1198,6 +1213,7 @@ async function openServiceSheet(id) {
     document.getElementById('svcTitle').textContent = 'Услуга';
     document.getElementById('svcName').value = s.name;
     document.getElementById('svcDur').value = s.duration_minutes;
+    document.getElementById('svcStep').value = String(s.slot_step_minutes || 30);
     document.getElementById('svcPrice').value = Math.round(Number(s.price));
     document.getElementById('svcActive').setAttribute('aria-checked', String(!!s.is_active));
     const assigned = await api(`/api/services/${id}/masters`);
@@ -1206,6 +1222,7 @@ async function openServiceSheet(id) {
     document.getElementById('svcTitle').textContent = 'Новая услуга';
     document.getElementById('svcName').value = '';
     document.getElementById('svcDur').value = '60';
+    document.getElementById('svcStep').value = '30';
     document.getElementById('svcPrice').value = '';
     document.getElementById('svcActive').setAttribute('aria-checked', 'true');
     state.svc = { id: null, masterIds: [] };
@@ -1229,14 +1246,15 @@ document.getElementById('svcMasterChips').addEventListener('click', e => {
 document.getElementById('svcSubmitBtn').addEventListener('click', async () => {
   const name = document.getElementById('svcName').value.trim();
   const duration_minutes = parseInt(document.getElementById('svcDur').value, 10);
+  const slot_step_minutes = parseInt(document.getElementById('svcStep').value, 10);
   const price = parseFloat(document.getElementById('svcPrice').value);
   const is_active = document.getElementById('svcActive').getAttribute('aria-checked') === 'true';
   const hint = document.getElementById('svcHint');
   if (!name || !duration_minutes || !(price >= 0)) { hint.textContent = 'Заполните название, длительность и цену'; return; }
   try {
     let id = state.svc.id;
-    if (id) await api(`/api/services/${id}`, { method: 'PUT', body: JSON.stringify({ name, duration_minutes, price, is_active }) });
-    else { const created = await api('/api/services', { method: 'POST', body: JSON.stringify({ name, duration_minutes, price }) }); id = created.id; }
+    if (id) await api(`/api/services/${id}`, { method: 'PUT', body: JSON.stringify({ name, duration_minutes, slot_step_minutes, price, is_active }) });
+    else { const created = await api('/api/services', { method: 'POST', body: JSON.stringify({ name, duration_minutes, slot_step_minutes, price }) }); id = created.id; }
     await api(`/api/services/${id}/masters`, { method: 'PUT', body: JSON.stringify({ masterIds: state.svc.masterIds }) });
     closeSheet(); toast('Сохранено');
     loadServices();

@@ -3,7 +3,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { db } from './database.js';
 import { sendText, getWaStatus } from './whatsapp.js';
-import { formatDateFull, getTimeSlotsForMaster } from './utils.js';
+import { formatDateFull, getDayOfWeek } from './utils.js';
+import {
+  DEFAULT_STEP_MIN, findConflicts, getDaySchedule, getFreeSlots, previewSlots, validateIntervals,
+} from './schedule.js';
 import * as waitlist from './waitlist.js';
 import { authorizeAdmin, clerk } from './adminAuth.js';
 
@@ -192,19 +195,23 @@ adminRouter.get('/api/services', async (_req, res) => {
 });
 
 adminRouter.post('/api/services', async (req, res) => {
-  const { name, description, duration_minutes, price } = req.body || {};
+  const { name, description, duration_minutes, slot_step_minutes, price } = req.body || {};
   if (!name || !duration_minutes || price == null) return res.status(400).json({ error: 'missing_fields' });
-  res.json(await db.createService({ name, description, durationMinutes: duration_minutes, price }));
+  res.json(await db.createService({
+    name, description, durationMinutes: duration_minutes,
+    slotStepMinutes: slot_step_minutes, price,
+  }));
 });
 
 adminRouter.put('/api/services/:id', async (req, res) => {
-  const { name, description, duration_minutes, price, is_active } = req.body || {};
+  const { name, description, duration_minutes, slot_step_minutes, price, is_active } = req.body || {};
   if (!name || !duration_minutes || price == null) return res.status(400).json({ error: 'missing_fields' });
   res.json(
     await db.updateService(req.params.id, {
       name,
       description,
       durationMinutes: duration_minutes,
+      slotStepMinutes: slot_step_minutes,
       price,
       isActive: is_active !== false,
     })
@@ -254,11 +261,25 @@ adminRouter.put('/api/masters/:id', async (req, res) => {
   res.json(master);
 });
 
-// ── Working hours ─────────────────────────────────────────────────────────
+// ── Working hours (compatibility shim) ────────────────────────────────────
+// The panel still speaks the old single-interval API; the hours screen is
+// rewritten in the next change and this goes with it. Backed by the template
+// so both shapes read and write the same rows.
 adminRouter.get('/api/working-hours', async (req, res) => {
   const masterId = parseInt(req.query.masterId, 10);
   if (!masterId) return res.status(400).json({ error: 'missing_master_id' });
-  res.json(await db.getWorkingHoursForMaster(masterId));
+
+  const template = await db.getScheduleTemplate(masterId);
+  res.json(
+    template
+      .filter(t => t.is_working && t.intervals?.length)
+      .map(t => ({
+        master_id: t.master_id,
+        day_of_week: t.weekday,
+        start_time: t.intervals[0].from,
+        end_time: t.intervals[t.intervals.length - 1].to,
+      }))
+  );
 });
 
 adminRouter.put('/api/working-hours', async (req, res) => {
@@ -266,11 +287,136 @@ adminRouter.put('/api/working-hours', async (req, res) => {
   if (masterId == null || dayOfWeek == null) return res.status(400).json({ error: 'missing_fields' });
 
   if (!startTime || !endTime) {
-    await db.deleteWorkingHour(masterId, dayOfWeek);
-  } else {
-    await db.upsertWorkingHour(masterId, dayOfWeek, startTime, endTime);
+    await db.upsertTemplateDay(masterId, dayOfWeek, false, []);
+    return res.json({ ok: true });
   }
+
+  let intervals;
+  try {
+    intervals = validateIntervals([{ from: startTime, to: endTime, breaks: [] }]);
+  } catch (err) {
+    return res.status(400).json({ error: err.code || 'invalid_intervals', message: err.message });
+  }
+  await db.upsertTemplateDay(masterId, dayOfWeek, true, intervals);
   res.json({ ok: true });
+});
+
+// ── Schedule: weekly template ─────────────────────────────────────────────
+// Editing the template never touches dates that carry an override — that is
+// the whole point of the two levels, so there is no cascade here.
+adminRouter.get('/api/schedule/template', async (req, res) => {
+  const masterId = parseInt(req.query.masterId, 10);
+  if (!masterId) return res.status(400).json({ error: 'missing_master_id' });
+  res.json(await db.getScheduleTemplate(masterId));
+});
+
+adminRouter.put('/api/schedule/template', async (req, res) => {
+  const { masterId, weekday, isWorking } = req.body || {};
+  if (!masterId || weekday == null) return res.status(400).json({ error: 'missing_fields' });
+
+  if (!isWorking) {
+    await db.upsertTemplateDay(masterId, weekday, false, []);
+    return res.json({ ok: true });
+  }
+
+  let intervals;
+  try {
+    intervals = validateIntervals(req.body?.intervals);
+  } catch (err) {
+    return res.status(400).json({ error: err.code || 'invalid_intervals', message: err.message });
+  }
+  res.json(await db.upsertTemplateDay(masterId, weekday, true, intervals));
+});
+
+// ── Schedule: per-date overrides ─────────────────────────────────────────
+adminRouter.get('/api/schedule/overrides', async (req, res) => {
+  const { masterId, from, to } = req.query;
+  if (!masterId || !from || !to) return res.status(400).json({ error: 'missing_fields' });
+  res.json(await db.listOverrides(parseInt(masterId, 10), from, to));
+});
+
+// The effective day: what governs this date, the slots it yields, and any
+// appointment those hours would cut across.
+adminRouter.get('/api/schedule/day', async (req, res) => {
+  const { masterId, date, serviceId } = req.query;
+  if (!masterId || !date) return res.status(400).json({ error: 'missing_fields' });
+
+  const id = parseInt(masterId, 10);
+  const day = await getDaySchedule(id, date);
+  const service = serviceId ? await db.getService(parseInt(serviceId, 10)) : null;
+  const durationMin = service?.duration_minutes || 60;
+
+  const [slots, conflicts] = await Promise.all([
+    getFreeSlots(id, date, durationMin, {
+      stepMin: service?.slot_step_minutes || DEFAULT_STEP_MIN,
+      includeBusy: true,
+    }),
+    findConflicts(id, date, day.intervals),
+  ]);
+
+  res.json({ ...day, date, slots, conflicts });
+});
+
+// Saving is deliberately not blocked by conflicts: the salon knows it has a
+// client booked into the hour it is taking off, and cancelling their
+// appointment behind their back is worse than flagging it.
+adminRouter.put('/api/schedule/override', async (req, res) => {
+  const { masterId, date, kind, repeatWeekly } = req.body || {};
+  if (!masterId || !date || !['custom', 'dayoff'].includes(kind)) {
+    return res.status(400).json({ error: 'missing_fields' });
+  }
+
+  let intervals = [];
+  if (kind === 'custom') {
+    try {
+      intervals = validateIntervals(req.body?.intervals);
+    } catch (err) {
+      return res.status(400).json({ error: err.code || 'invalid_intervals', message: err.message });
+    }
+  }
+
+  await db.upsertOverride(masterId, date, kind, intervals);
+
+  // "Repeat every <weekday>" moves the same hours into the standing week.
+  // Other dates that already carry their own override keep it.
+  if (repeatWeekly) {
+    await db.upsertTemplateDay(masterId, getDayOfWeek(date), kind === 'custom', intervals);
+  }
+
+  res.json({ ok: true, conflicts: await findConflicts(masterId, date, intervals) });
+});
+
+// Back to the template — the row goes away, so the date follows the weekly
+// schedule again, including any later edit to it.
+adminRouter.delete('/api/schedule/override', async (req, res) => {
+  const { masterId, date } = req.query;
+  if (!masterId || !date) return res.status(400).json({ error: 'missing_fields' });
+  await db.deleteOverride(parseInt(masterId, 10), date);
+  res.json({ ok: true });
+});
+
+// Slots for intervals the salon has typed but not yet saved, so the editor
+// can show what it is about to do.
+adminRouter.post('/api/schedule/preview', async (req, res) => {
+  const { masterId, date, kind, serviceId } = req.body || {};
+  if (!masterId || !date) return res.status(400).json({ error: 'missing_fields' });
+
+  let intervals = [];
+  if (kind !== 'dayoff') {
+    try {
+      intervals = validateIntervals(req.body?.intervals);
+    } catch (err) {
+      return res.status(400).json({ error: err.code || 'invalid_intervals', message: err.message });
+    }
+  }
+
+  const service = serviceId ? await db.getService(parseInt(serviceId, 10)) : null;
+  const slots = await previewSlots(masterId, date, intervals, {
+    durationMin: service?.duration_minutes,
+    stepMin: service?.slot_step_minutes,
+  });
+
+  res.json({ slots, conflicts: await findConflicts(masterId, date, intervals) });
 });
 
 // ── Service ↔ master assignment ──────────────────────────────────────────
@@ -287,13 +433,16 @@ adminRouter.put('/api/services/:id/masters', async (req, res) => {
 
 // ── Available slots (reschedule sheet + new-appointment sheet) ───────────
 adminRouter.get('/api/available-slots', async (req, res) => {
-  const { masterId, date, durationMinutes, excludeApptId } = req.query;
+  const { masterId, date, durationMinutes, stepMinutes, excludeApptId } = req.query;
   if (!masterId || !date || !durationMinutes) return res.status(400).json({ error: 'missing_fields' });
-  const slots = await getTimeSlotsForMaster(
+  const slots = await getFreeSlots(
     parseInt(masterId, 10),
     date,
     parseInt(durationMinutes, 10),
-    excludeApptId ? parseInt(excludeApptId, 10) : null
+    {
+      stepMin: stepMinutes ? parseInt(stepMinutes, 10) : DEFAULT_STEP_MIN,
+      excludeApptId: excludeApptId ? parseInt(excludeApptId, 10) : null,
+    }
   );
   res.json(slots);
 });

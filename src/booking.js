@@ -2,7 +2,8 @@ import { db } from './database.js';
 import { sendText } from './whatsapp.js';
 import { sendMenu } from './menu.js';
 import { getSession, setSession, clearSession } from './session.js';
-import { formatDateShort, formatDateFull, formatPrice, getAvailableDates, getTimeSlotsForMaster } from './utils.js';
+import { formatDateShort, formatDateFull, formatPrice } from './utils.js';
+import { getAvailableDates, getFreeSlots } from './schedule.js';
 import * as waitlist from './waitlist.js';
 
 const SLOTS_PAGE_SIZE = 9;
@@ -56,6 +57,7 @@ export async function chooseService(phone, serviceIdStr) {
     serviceId,
     serviceName: service.name,
     serviceDuration: service.duration_minutes,
+    serviceStep: service.slot_step_minutes,
     servicePrice: service.price,
   });
 
@@ -98,7 +100,9 @@ export async function chooseDate(phone, dateStr) {
   const session = getSession(phone);
   if (!session || session.step !== 'choose_date') return start(phone);
 
-  const slots = await getTimeSlotsForMaster(session.masterId, dateStr, session.serviceDuration);
+  const slots = await getFreeSlots(session.masterId, dateStr, session.serviceDuration, {
+    stepMin: session.serviceStep,
+  });
   if (!slots.length) {
     setSession(phone, { ...session, step: 'waitlist_offer', date: dateStr });
     return sendMenu(

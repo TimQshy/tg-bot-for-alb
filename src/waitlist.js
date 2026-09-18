@@ -5,7 +5,8 @@ import { db } from './database.js';
 import { sendText } from './whatsapp.js';
 import { sendMenu } from './menu.js';
 import { getSession, clearSession } from './session.js';
-import { formatDateFull, getTimeSlotsForMaster } from './utils.js';
+import { formatDateFull } from './utils.js';
+import { getFreeSlots } from './schedule.js';
 import { sendMainMenu } from './booking.js';
 
 const ADMIN_PHONES = () => (process.env.ADMIN_PHONES || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -36,7 +37,9 @@ export async function notifyNext(masterId, date) {
   const entry = await db.getNextWaiting(masterId, date);
   if (!entry) return;
 
-  const slots = await getTimeSlotsForMaster(masterId, date, entry.duration_minutes);
+  const slots = await getFreeSlots(masterId, date, entry.duration_minutes, {
+    stepMin: entry.slot_step_minutes,
+  });
   if (!slots.length) return; // freed gap doesn't fit this service's duration yet
 
   const slot = slots[0];

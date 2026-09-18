@@ -1,5 +1,3 @@
-import { db } from './database.js';
-
 const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const DAYS_FULL  = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня',
@@ -7,8 +5,22 @@ const MONTHS_GEN = ['января','февраля','марта','апреля',
 const MONTHS_SHORT = ['янв','фев','мар','апр','май','июн',
                       'июл','авг','сен','окт','ноя','дек'];
 
+// Everything is reckoned in the salon's timezone, not the server's and not
+// the client's. Reading UTC here made "today" flip hours early or late for
+// the salon, which moved the cut-off for same-day slots with it. 'sv-SE'
+// formats as YYYY-MM-DD, which is what the rest of the code expects.
+const TZ = process.env.TIMEZONE || 'Europe/Moscow';
+
 export function todayStr() {
-  return new Date().toISOString().split('T')[0];
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: TZ }).format(new Date());
+}
+
+// Minutes since midnight, in the salon's timezone.
+export function nowMinutes() {
+  const hhmm = new Intl.DateTimeFormat('en-GB', {
+    timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date());
+  return toMinutes(hhmm);
 }
 
 export function addDays(dateStr, n) {
@@ -47,44 +59,8 @@ export function toTimeString(min) {
   return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 }
 
-// Generate free time slots given working hours, service duration, and booked slots
-export function generateSlots(startTime, endTime, durationMin, bookedSlots) {
-  const start = toMinutes(startTime);
-  const end   = toMinutes(endTime);
-  const slots = [];
-
-  for (let s = start; s + durationMin <= end; s += 30) {
-    const e = s + durationMin;
-    const overlaps = bookedSlots.some(b => {
-      const bs = toMinutes(b.start_time);
-      const be = toMinutes(b.end_time);
-      return !(e <= bs || s >= be);
-    });
-    if (!overlaps) slots.push({ start: toTimeString(s), end: toTimeString(e) });
-  }
-  return slots;
-}
-
-// Returns date strings (next `days` days) where the master has working hours
-export async function getAvailableDates(masterId, days = 14) {
-  const dates = [];
-  for (let i = 1; i <= days; i++) {
-    const dateStr = addDays(todayStr(), i);
-    const dow = getDayOfWeek(dateStr);
-    const hours = await db.getWorkingHours(masterId, dow);
-    if (hours) dates.push(dateStr);
-  }
-  return dates;
-}
-
-// Returns free time slots for master on a given date
-export async function getTimeSlotsForMaster(masterId, dateStr, durationMin, excludeApptId = null) {
-  const dow = getDayOfWeek(dateStr);
-  const hours = await db.getWorkingHours(masterId, dow);
-  if (!hours) return [];
-  const booked = await db.getBookedSlots(masterId, dateStr, excludeApptId);
-  return generateSlots(hours.start_time, hours.end_time, durationMin, booked);
-}
+// Slots live in src/schedule.js — see getFreeSlots(), the single source for
+// every surface that offers a time to a client.
 
 export const DAYS_SHORT_EXPORT = DAYS_SHORT;
 export const DAYS_FULL_EXPORT  = DAYS_FULL;
