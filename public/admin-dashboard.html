@@ -245,13 +245,27 @@ h1,h2,h3{margin:0;font-weight:600}
 .daycard__acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .ivrow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .ivrow .timeinput{flex:1;min-width:0}
-.ivrow .input{flex:1;min-width:0}
+/* A break carries a reason as well as two times; at phone width that does
+   not fit on one line, so the reason wraps onto its own. */
+.ivrow--break{flex-wrap:wrap}
+.ivrow--break .input{flex:1 0 100%;order:4}
 .iconbtn--sm{width:38px;height:38px;flex:0 0 auto;border-radius:var(--r-sm);color:var(--ink-3);border:1px solid var(--line)}
 .slot--busy{background:var(--surface-2);color:var(--ink-3);text-decoration:line-through}
 .slot--break{background:var(--warn-soft);border-color:var(--warn-soft);color:var(--warn)}
 .warnbox{border:1px solid var(--warn);background:var(--warn-soft);color:var(--warn);border-radius:var(--r-sm);padding:10px 12px;font-size:13px;margin-top:12px}
 .warnbox__row{display:flex;align-items:center;gap:8px;margin-top:6px}
 .warnbox__row span{flex:1}
+
+/* Перерыв в сетке дня, и запись, попавшая в него */
+.tl-break{display:grid;grid-template-columns:58px 1fr;column-gap:10px;margin:0 0 10px}
+.tl-break__rail{position:relative}
+.tl-break__rail::before{content:"";position:absolute;right:5px;top:-10px;bottom:0;width:1px;background:var(--warn);opacity:.4}
+.tl-break__time{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:13px;color:var(--warn);display:block;text-align:right;padding:10px 12px 0 0}
+.tl-break__body{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;border-radius:var(--r-sm);color:var(--warn);font-size:12.5px;
+  background:repeating-linear-gradient(135deg, var(--warn-soft) 0 8px, transparent 8px 16px);
+  border:1px solid var(--warn-soft)}
+.appt--conflict{border-color:var(--warn);box-shadow:none}
+.status--conflict{background:var(--warn-soft);color:var(--warn)}
 .hint{font-size:12.5px;color:var(--ink-3);margin:2px 0 0}
 .hint--err{color:#C0392B}
 :root[data-theme="dark"] .hint--err{color:#F08A7E}
@@ -664,6 +678,14 @@ const MONTHS_SHORT = ['янв','фев','мар','апр','май','июн','и�
 function fmtDayShort(dateStr) {
   const d = new Date(dateStr + 'T12:00:00Z');
   return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`;
+}
+// 1 запись / 2 записи / 5 записей — 11–14 take the last form, which a plain
+// "n < 5" check gets wrong.
+function plural(n, one, few, many) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
 }
 function toast(msg) {
   const t = document.createElement('div');
@@ -1080,9 +1102,15 @@ async function renderTimeline() {
   const revenue = confirmed.reduce((sum, a) => sum + Number(a.price || 0), 0);
 
   let gapsHtml = '';
+  let breaks = [];
+  let conflictIds = new Set();
+  let awayBtn = '';
   let gapsInfo = '<span class="dot"></span><span>выберите одного мастера, чтобы увидеть окна</span>';
   if (state.filterMasterId) {
     const day = await getDayInfo(state.filterMasterId, state.date);
+    breaks = day.intervals.flatMap(iv => (iv.breaks || []).map(b => ({ ...b })));
+    conflictIds = new Set(day.conflicts.map(c => c.id));
+    awayBtn = '<button class="tl-gap__add" id="awayBtn" style="margin-left:auto">Отлучиться</button>';
     if (day.isWorking && day.intervals.length) {
       // A gap is working time with neither an appointment nor a break in it.
       const gaps = [];
@@ -1100,7 +1128,7 @@ async function renderTimeline() {
         }
         if (cursor < ivEnd) gaps.push({ start: cursor, end: ivEnd });
       }
-      gapsInfo = `<span class="dot"></span><span>${gaps.length} окон${gaps.length === 1 ? 'о' : ''}</span>`;
+      gapsInfo = `<span class="dot"></span><span>${gaps.length} ${plural(gaps.length, 'окно', 'окна', 'окон')}</span>`;
       gapsHtml = gaps.filter(g => g.end - g.start >= 10).map(g => `
         <li class="tl-gap">
           <div class="tl-gap__rail"></div>
@@ -1112,17 +1140,27 @@ async function renderTimeline() {
     }
   }
 
-  daybar.innerHTML = `<b>${sorted.length} запис${sorted.length === 1 ? 'ь' : sorted.length < 5 ? 'и' : 'ей'}</b>
-    <span class="dot"></span><span>выручка <b class="num">${fmtMoney(revenue)}</b></span>${gapsInfo}`;
+  daybar.innerHTML = `<b>${sorted.length} ${plural(sorted.length, 'запись', 'записи', 'записей')}</b>
+    <span class="dot"></span><span>выручка <b class="num">${fmtMoney(revenue)}</b></span>${gapsInfo}${awayBtn}`;
 
-  if (!sorted.length) {
+  const away = document.getElementById('awayBtn');
+  if (away) away.addEventListener('click', openAwaySheet);
+
+  if (!sorted.length && !breaks.length) {
     timeline.innerHTML = '';
     empty.hidden = false;
     return;
   }
   empty.hidden = true;
 
-  timeline.innerHTML = sorted.map(a => apptCardHtml(a)).join('') + gapsHtml;
+  // Breaks sit in the same column as appointments, in time order, so the day
+  // reads as one strip rather than a list with a separate legend.
+  const items = [
+    ...sorted.map(a => ({ at: toMin(a.start_time), html: apptCardHtml(a, conflictIds.has(a.id)) })),
+    ...breaks.map(b => ({ at: toMin(b.from), html: breakBlockHtml(b) })),
+  ].sort((a, b) => a.at - b.at);
+
+  timeline.innerHTML = items.map(i => i.html).join('') + gapsHtml;
 
   timeline.querySelectorAll('[data-move]').forEach(b => b.addEventListener('click', () => openMoveSheet(b.dataset.move)));
   timeline.querySelectorAll('[data-cancel]').forEach(b => b.addEventListener('click', () => openCancelSheet(b.dataset.cancel)));
@@ -1131,20 +1169,43 @@ async function renderTimeline() {
   })));
 }
 
+function breakBlockHtml(b) {
+  return `
+    <li class="tl-break">
+      <div class="tl-break__rail"><span class="tl-break__time">${b.from}</span></div>
+      <div class="tl-break__body">Перерыв${b.note ? ' · ' + escapeHtml(b.note) : ''} · ${b.from}–${b.to}</div>
+    </li>`;
+}
+
+// "Отлучиться" is the same day editor, opened on the current date with a
+// break already filled in for the hour that is starting.
+async function openAwaySheet() {
+  const masterId = state.filterMasterId;
+  const day = await getDayInfo(masterId, state.date);
+  const now = new Date();
+  const from = state.date === todayISO()
+    ? `${String(now.getHours()).padStart(2, '0')}:00`
+    : '12:00';
+  const to = toHHMM(Math.min(toMin(from) + 60, 24 * 60));
+
+  state.hoursMasterId = masterId;
+  openDaySheet(state.date, day, { from, to, note: '' });
+}
+
 function statusPill(status) {
   if (status === 'confirmed') return '<span class="status status--ok"><i></i>подтверждена</span>';
   if (status === 'completed') return '<span class="status status--wait"><i></i>завершена</span>';
   return '<span class="status status--off"><i></i>отменена</span>';
 }
 
-function apptCardHtml(a) {
+function apptCardHtml(a, isConflict = false) {
   const isConfirmed = a.status === 'confirmed';
   const durMin = toMin(a.end_time) - toMin(a.start_time);
   const initial = (a.master_name || '?').trim()[0] || '?';
   return `
     <li class="tl${!isConfirmed ? ' tl--off' : ''}">
       <div class="tl__rail"><span class="tl__time num">${fmtTime(a.start_time)}</span><span class="tl__mark"></span></div>
-      <article class="appt${!isConfirmed ? ' appt--off' : ''}">
+      <article class="appt${!isConfirmed ? ' appt--off' : ''}${isConflict ? ' appt--conflict' : ''}">
         <div class="appt__top">
           <h2 class="appt__client">${escapeHtml(a.user_name)}</h2>
           <span class="appt__id">#${a.id}</span>
@@ -1154,6 +1215,7 @@ function apptCardHtml(a) {
           <span class="master"><span class="ava">${escapeHtml(initial)}</span>${escapeHtml(a.master_name)}</span>
           <span class="appt__dur">${durMin} мин · до ${fmtTime(a.end_time)}</span>
           ${statusPill(a.status)}
+          ${isConflict ? '<span class="status status--conflict"><i></i>конфликт</span>' : ''}
         </div>
         ${isConfirmed ? `
         <div class="appt__actions">
@@ -1630,7 +1692,7 @@ async function renderDayCard() {
     <p>${source}</p>
     <p class="hoursrow__hours">${day.intervals.length ? day.intervals.map(iv => `${iv.from}–${iv.to}`).join(', ') : '—'}</p>
     ${breaks ? `<p style="margin:0">${breaks}</p>` : ''}
-    <p style="margin-top:6px">${day.isWorking ? `${free} свободных слотов` : 'записи недоступны'}</p>
+    <p style="margin-top:6px">${day.isWorking ? `${free} ${plural(free, 'свободный слот', 'свободных слота', 'свободных слотов')}` : 'записи недоступны'}</p>
     <div class="daycard__acts">
       <button class="btn btn--primary" id="editDayBtn">Изменить день</button>
       ${day.source === 'override' ? '<button class="btn btn--ghost" id="resetDayBtn">Вернуть шаблон</button>' : ''}
@@ -1718,7 +1780,7 @@ function renderDaySheet() {
 
   document.getElementById('dayBreaks').innerHTML = d.breaks.length
     ? d.breaks.map((b, i) => `
-      <div class="ivrow" data-br="${i}">
+      <div class="ivrow ivrow--break" data-br="${i}">
         <input class="timeinput" type="time" data-br-from value="${b.from}">
         <span style="color:var(--ink-3)">—</span>
         <input class="timeinput" type="time" data-br-to value="${b.to}">
