@@ -4,6 +4,12 @@
 // never wrote to us first); if their DMs are closed that call fails, and we
 // answer publicly under the comment instead.
 //
+// A comment gets exactly one message back. The private reply is the single
+// exception Instagram makes for someone who never wrote to us and it does
+// not open the 24-hour window — only their own reply does. So a multi-part
+// answer reaches a commenter as its first part alone; the whole chain goes
+// out only in Direct, once they have written.
+//
 // Deliberately separate from the WhatsApp booking flow: no FSM, no session,
 // no reminders. Instagram's 24-hour messaging window makes proactive
 // messages impossible anyway, so bookings stay on WhatsApp.
@@ -87,33 +93,12 @@ async function matchReply(text) {
 // order they arrive in, and firing them together is how a three-part answer
 // shows up shuffled. Stops at the first failure: the rest of a chain whose
 // opening message never arrived only makes the thread confusing.
-async function sendChain(recipient, parts, fallbackId = null) {
-  let target = recipient;
+async function sendChain(recipient, parts) {
   for (const [i, text] of parts.entries()) {
-    const res = await call('POST', '/me/messages', { recipient: target, message: { text } });
+    const res = await call('POST', '/me/messages', { recipient, message: { text } });
     if (!res.ok) return { ok: false, first: i === 0, status: res.status, body: res.body };
-
-    // A comment-addressed message can only be the first one: the send tells
-    // us who the commenter is, and the rest of the chain goes to them by id.
-    // The webhook's own from.id is the same person and covers the case where
-    // the response comes back without recipient_id.
-    if (target.comment_id) {
-      const id = parseRecipientId(res.body) || fallbackId;
-      if (!id) {
-        return { ok: false, first: false, status: res.status, body: 'no recipient id, rest of chain dropped' };
-      }
-      target = { id };
-    }
   }
   return { ok: true };
-}
-
-function parseRecipientId(body) {
-  try {
-    return JSON.parse(body).recipient_id || null;
-  } catch {
-    return null;
-  }
 }
 
 async function handleComment(value) {
@@ -130,9 +115,19 @@ async function handleComment(value) {
   const parts = await matchReply(text);
   if (!parts?.length) return;
 
-  const dm = await sendChain({ comment_id: commentId }, parts, value.from?.id || null);
+  // Exactly one message reaches a commenter, and this is it. A private reply
+  // is the single exception Instagram makes for someone who never wrote to
+  // us; it does not open the 24-hour window, so message two comes back as
+  // "This message is sent outside of allowed window" (code 10, subcode
+  // 2534022). The rest of the chain is not attempted — it cannot succeed,
+  // and the failed call would only bury the log.
+  const dm = await sendChain({ comment_id: commentId }, parts.slice(0, 1));
   if (dm.ok) {
-    console.log(`[ig] private reply sent for comment ${commentId} (${parts.length} msg)`);
+    const held = parts.length - 1;
+    console.log(
+      `[ig] private reply sent for comment ${commentId}` +
+      (held ? ` — 1 msg, ${held} held back (one private reply per comment)` : '')
+    );
     return;
   }
 

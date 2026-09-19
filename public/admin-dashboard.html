@@ -471,6 +471,7 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <p class="hint" id="igMsg"></p>
       <p class="hint">Бот идёт по списку сверху вниз и отвечает первым подошедшим текстом. Слово ищется внутри сообщения, регистр не важен: «+» сработает и на «+», и на «+ сколько стоит». Звёздочка <b>*</b> подходит к чему угодно — держите её последней. Если не подошло ничего, бот молчит.</p>
       <p class="hint">Instagram не принимает сообщение длиннее 2000 символов. Длинный ответ разбейте сами кнопкой «+ Ещё сообщение следом» — бот отправит их одно за другим, сверху вниз.</p>
+      <p class="hint"><b>На комментарий Instagram разрешает ответить только одним сообщением.</b> Тому, кто пришёл из комментария, уйдёт только «Сообщение 1» — остальные бот отправить не может, пока человек не напишет в директ сам. Поэтому первое сообщение должно читаться само по себе: расскажите главное и позовите написать в директ. Целиком цепочка уходит тем, кто пишет в директ.</p>
 
       <h2 class="subhead">Если аккаунт закрытый</h2>
       <div class="card" style="padding:16px">
@@ -967,12 +968,25 @@ function replyEditor({ prefix, endpoint, keywordPlaceholder, replyPlaceholder, f
   const msg = document.getElementById(prefix + 'Msg');
   let rows = [];
 
+  function partLabel(j, many) {
+    if (!limit) return 'Что отправить';
+    if (!many) return 'Что отправить';
+    // Instagram lets us answer a commenter exactly once, so message 1 is the
+    // whole answer for everyone who came from a comment. Saying it on the
+    // field itself, not only in the hint below, is the difference between
+    // the owner writing a first message that stands alone and one that
+    // breaks off mid-sentence.
+    return j === 0
+      ? 'Сообщение 1 — и в директ, и в ответ на комментарий'
+      : `Сообщение ${j + 1} — только в директ`;
+  }
+
   function partHtml(r, i, j) {
     const many = r.parts.length > 1;
     const over = limit && r.parts[j].length > limit;
     return `
       <div class="field">
-        <span class="field__label">${limit ? (many ? 'Сообщение ' + (j + 1) : 'Что отправить') : 'Что отправить'}</span>
+        <span class="field__label">${partLabel(j, many)}</span>
         <textarea class="input input--area" data-part="${i}:${j}" placeholder="${escapeHtml(replyPlaceholder)}">${escapeHtml(r.parts[j])}</textarea>
         ${limit ? `<p class="hint${over ? ' hint--err' : ''}" data-count="${i}:${j}">${r.parts[j].length} / ${limit}</p>` : ''}
         ${many ? `<button class="btn btn--ghost btn--block" data-delpart="${i}:${j}" style="margin-top:6px">Убрать это сообщение</button>` : ''}
