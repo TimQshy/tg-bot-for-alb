@@ -210,6 +210,14 @@ CREATE TABLE IF NOT EXISTS wa_replies (
   is_active BOOLEAN NOT NULL DEFAULT true
 );
 
+-- One answer can be a chain of messages sent one after another: Instagram
+-- refuses any single message longer than 2000 characters, so a long text is
+-- split by hand in the panel and the bot just walks the chain in order.
+-- The reply column keeps the whole thing joined so the old single-text
+-- readers (and anyone looking at the table) still see the full answer.
+ALTER TABLE ig_replies ADD COLUMN IF NOT EXISTS parts JSONB;
+ALTER TABLE wa_replies ADD COLUMN IF NOT EXISTS parts JSONB;
+
 -- Delivered webhook events, so Meta's retries don't answer the same comment
 -- twice. Ids are prefixed by kind ("c:<comment id>", "m:<message id>").
 CREATE TABLE IF NOT EXISTS ig_events (
@@ -242,7 +250,16 @@ async function listReplies(table) {
   const { rows } = await pool.query(
     `SELECT * FROM ${table} WHERE is_active=true ORDER BY position, id`
   );
-  return rows;
+  // Rows saved before the chain existed have no parts — their single text is
+  // the whole chain, so callers never have to care which era a row is from.
+  return rows.map(r => ({ ...r, parts: replyParts(r) }));
+}
+
+function replyParts(row) {
+  const parts = Array.isArray(row.parts)
+    ? row.parts.filter(p => typeof p === 'string' && p.trim()).map(p => p.trim())
+    : [];
+  return parts.length ? parts : [row.reply];
 }
 
 // The whole list is rewritten at once: order decides which keyword wins, so
@@ -253,9 +270,10 @@ async function replaceReplies(table, replies) {
     await client.query('BEGIN');
     await client.query(`DELETE FROM ${table}`);
     for (const [i, r] of replies.entries()) {
+      const parts = r.parts?.length ? r.parts : [r.reply];
       await client.query(
-        `INSERT INTO ${table} (keyword, reply, position) VALUES ($1,$2,$3)`,
-        [r.keyword, r.reply, i]
+        `INSERT INTO ${table} (keyword, reply, position, parts) VALUES ($1,$2,$3,$4)`,
+        [r.keyword, parts.join('\n\n'), i, JSON.stringify(parts)]
       );
     }
     await client.query('COMMIT');

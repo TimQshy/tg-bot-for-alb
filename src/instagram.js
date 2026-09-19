@@ -11,12 +11,32 @@ import crypto from 'crypto';
 import express from 'express';
 import { db } from './database.js';
 import { botEnabled } from './botState.js';
+import { splitText } from './utils.js';
 
 const GRAPH = 'https://graph.instagram.com/v21.0';
 
-const CLOSED_DM_TEXT =
+// Instagram rejects any single direct message over this: "Length of param
+// message[text] must be less than or equal to 2000". The panel splits long
+// answers into a chain before they are saved; this is what it validates
+// against and what the send path falls back to.
+export const IG_MESSAGE_LIMIT = 2000;
+
+// A closed (private) account cannot be reached in Direct at all — the
+// private reply just fails. The only way left to say anything to that person
+// is a public comment under their own comment, so that is what we do.
+//
+// The salon edits this text on the Instagram screen; the environment
+// variable stays as the seed for an instance that has never touched it.
+export const CLOSED_DM_KEY = 'closed_dm_text';
+
+export const DEFAULT_CLOSED_DM_TEXT =
   process.env.IG_CLOSED_DM_TEXT ||
-  'У вас закрыт директ — напишите нам в сообщения, всё вышлем 🙂';
+  'У вас закрытый аккаунт — мы не можем написать вам в директ. ' +
+  'Напишите нам сами в сообщения, и мы всё вышлем 🙂';
+
+export async function closedDmText() {
+  return (await db.getIgConfig(CLOSED_DM_KEY)) || DEFAULT_CLOSED_DM_TEXT;
+}
 
 let cachedUsername = null;
 
@@ -47,14 +67,53 @@ async function myUsername() {
   return cachedUsername;
 }
 
+// Returns the chain of messages to send, in order, or null when nothing
+// matched. Every message is re-checked against the 2000-character limit
+// here too: rows saved before the chain existed are one long text, and the
+// panel is not the only thing that can write to the table.
 async function matchReply(text) {
   const lower = (text || '').trim().toLowerCase();
   for (const row of await db.getIgReplies()) {
     const keyword = row.keyword.trim().toLowerCase();
     if (!keyword) continue;
-    if (keyword === '*' || lower.includes(keyword)) return row.reply;
+    if (keyword === '*' || lower.includes(keyword)) {
+      return row.parts.flatMap(part => splitText(part, IG_MESSAGE_LIMIT));
+    }
   }
   return null;
+}
+
+// Messages are sent one at a time and awaited in turn — Instagram keeps the
+// order they arrive in, and firing them together is how a three-part answer
+// shows up shuffled. Stops at the first failure: the rest of a chain whose
+// opening message never arrived only makes the thread confusing.
+async function sendChain(recipient, parts, fallbackId = null) {
+  let target = recipient;
+  for (const [i, text] of parts.entries()) {
+    const res = await call('POST', '/me/messages', { recipient: target, message: { text } });
+    if (!res.ok) return { ok: false, first: i === 0, status: res.status, body: res.body };
+
+    // A comment-addressed message can only be the first one: the send tells
+    // us who the commenter is, and the rest of the chain goes to them by id.
+    // The webhook's own from.id is the same person and covers the case where
+    // the response comes back without recipient_id.
+    if (target.comment_id) {
+      const id = parseRecipientId(res.body) || fallbackId;
+      if (!id) {
+        return { ok: false, first: false, status: res.status, body: 'no recipient id, rest of chain dropped' };
+      }
+      target = { id };
+    }
+  }
+  return { ok: true };
+}
+
+function parseRecipientId(body) {
+  try {
+    return JSON.parse(body).recipient_id || null;
+  } catch {
+    return null;
+  }
 }
 
 async function handleComment(value) {
@@ -68,20 +127,24 @@ async function handleComment(value) {
   if (author && author === (await myUsername())) return;
   if (!(await db.claimIgEvent(`c:${commentId}`))) return;
 
-  const reply = await matchReply(text);
-  if (!reply) return;
+  const parts = await matchReply(text);
+  if (!parts?.length) return;
 
-  const dm = await call('POST', '/me/messages', {
-    recipient: { comment_id: commentId },
-    message: { text: reply },
-  });
+  const dm = await sendChain({ comment_id: commentId }, parts, value.from?.id || null);
   if (dm.ok) {
-    console.log(`[ig] private reply sent for comment ${commentId}`);
+    console.log(`[ig] private reply sent for comment ${commentId} (${parts.length} msg)`);
     return;
   }
 
   console.log(`[ig] private reply failed (${dm.status}): ${dm.body}`);
-  const pub = await call('POST', `/${commentId}/replies`, { message: CLOSED_DM_TEXT });
+  // Only a failed *first* message means we never reached them — a chain that
+  // broke halfway has already been delivered in part, and telling that person
+  // publicly that we cannot reach them would be nonsense.
+  if (!dm.first) return;
+
+  const pub = await call('POST', `/${commentId}/replies`, {
+    message: (await closedDmText()).slice(0, IG_MESSAGE_LIMIT),
+  });
   console.log(`[ig] public comment reply ${pub.ok ? 'sent' : `failed: ${pub.body}`}`);
 }
 
@@ -93,14 +156,11 @@ async function handleMessage(event) {
   const eventId = message.mid || `${senderId}:${event.timestamp}`;
   if (!(await db.claimIgEvent(`m:${eventId}`))) return;
 
-  const reply = await matchReply(message.text || '');
-  if (!reply) return;
+  const parts = await matchReply(message.text || '');
+  if (!parts?.length) return;
 
-  const res = await call('POST', '/me/messages', {
-    recipient: { id: senderId },
-    message: { text: reply },
-  });
-  console.log(`[ig] dm to ${senderId} ${res.ok ? 'sent' : `failed: ${res.body}`}`);
+  const res = await sendChain({ id: senderId }, parts);
+  console.log(`[ig] dm to ${senderId} ${res.ok ? `sent (${parts.length} msg)` : `failed: ${res.body}`}`);
 }
 
 // Meta signs every delivery with the app secret. Needs the exact bytes that

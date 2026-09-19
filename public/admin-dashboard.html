@@ -470,6 +470,16 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <button class="btn btn--primary btn--block" id="igSaveBtn" style="margin-top:10px">Сохранить</button>
       <p class="hint" id="igMsg"></p>
       <p class="hint">Бот идёт по списку сверху вниз и отвечает первым подошедшим текстом. Слово ищется внутри сообщения, регистр не важен: «+» сработает и на «+», и на «+ сколько стоит». Звёздочка <b>*</b> подходит к чему угодно — держите её последней. Если не подошло ничего, бот молчит.</p>
+      <p class="hint">Instagram не принимает сообщение длиннее 2000 символов. Длинный ответ разбейте сами кнопкой «+ Ещё сообщение следом» — бот отправит их одно за другим, сверху вниз.</p>
+
+      <h2 class="subhead">Если аккаунт закрытый</h2>
+      <div class="card" style="padding:16px">
+        <label class="field"><span class="field__label">Публичный ответ под комментарием</span>
+          <textarea class="input input--area" id="igClosedText" placeholder="У вас закрытый аккаунт — мы не можем написать вам в директ."></textarea></label>
+        <button class="btn btn--primary btn--block" id="igClosedSaveBtn">Сохранить</button>
+        <p class="hint" id="igClosedMsg"></p>
+        <p class="hint">У человека с закрытым аккаунтом директ для нас закрыт — написать ему туда нельзя вообще. Остаётся только ответить публично под его же комментарием: поэтому здесь просьба написать нам первым. Пусто — вернётся текст по умолчанию.</p>
+      </div>
     </main>
 
     <!-- ====== СИС-АДМИН: выключатель бота и доступы ====== -->
@@ -861,7 +871,7 @@ function goto(name) {
   document.getElementById('fabAdd').hidden = name !== 'zapisi';
   if (name === 'mastera') loadMasters();
   if (name === 'salon') { loadServices(); loadSettings(); }
-  if (name === 'instagram') loadIgReplies();
+  if (name === 'instagram') { loadIgReplies(); loadIgClosedText(); }
   if (name === 'sysadmin') { loadBotState(); loadAccess(); }
   if (name === 'whatsapp') { startWaPolling(); loadWaReplies(); } else stopWaPolling();
 }
@@ -946,49 +956,98 @@ function stopWaPolling() {
 // Оба списка правятся и сохраняются целиком: порядок решает, какое слово
 // сработает первым, так что построчного сохранения тут быть не может.
 // Один редактор на два экрана — разница только в адресе API и подсказках.
-function replyEditor({ prefix, endpoint, keywordPlaceholder, replyPlaceholder, firstRow }) {
+//
+// An answer can be a chain: several messages the bot sends one after
+// another. Instagram refuses anything over 2000 characters in one message,
+// and the owner is the one who knows where a long text should break — so
+// the editor makes them pick the break points instead of cutting for them.
+// `limit` = 0 turns the chain off entirely (WhatsApp has no such ceiling).
+function replyEditor({ prefix, endpoint, keywordPlaceholder, replyPlaceholder, firstRow, limit = 0 }) {
   const list = document.getElementById(prefix + 'List');
   const msg = document.getElementById(prefix + 'Msg');
   let rows = [];
+
+  function partHtml(r, i, j) {
+    const many = r.parts.length > 1;
+    const over = limit && r.parts[j].length > limit;
+    return `
+      <div class="field">
+        <span class="field__label">${limit ? (many ? 'Сообщение ' + (j + 1) : 'Что отправить') : 'Что отправить'}</span>
+        <textarea class="input input--area" data-part="${i}:${j}" placeholder="${escapeHtml(replyPlaceholder)}">${escapeHtml(r.parts[j])}</textarea>
+        ${limit ? `<p class="hint${over ? ' hint--err' : ''}" data-count="${i}:${j}">${r.parts[j].length} / ${limit}</p>` : ''}
+        ${many ? `<button class="btn btn--ghost btn--block" data-delpart="${i}:${j}" style="margin-top:6px">Убрать это сообщение</button>` : ''}
+      </div>`;
+  }
 
   function render() {
     list.innerHTML = rows.map((r, i) => `
     <div class="card" style="padding:16px;margin-bottom:10px">
       <label class="field"><span class="field__label">Слово в сообщении</span>
         <input class="input" data-keyword="${i}" value="${escapeHtml(r.keyword)}" placeholder="${escapeHtml(keywordPlaceholder)}"></label>
-      <label class="field"><span class="field__label">Что отправить</span>
-        <textarea class="input input--area" data-reply="${i}" placeholder="${escapeHtml(replyPlaceholder)}">${escapeHtml(r.reply)}</textarea></label>
-      <button class="btn btn--danger btn--block" data-del="${i}">Удалить</button>
+      ${r.parts.map((_, j) => partHtml(r, i, j)).join('')}
+      ${limit ? `<button class="btn btn--ghost btn--block" data-addpart="${i}" style="margin-bottom:10px">+ Ещё сообщение следом</button>` : ''}
+      <button class="btn btn--danger btn--block" data-del="${i}">Удалить ответ</button>
     </div>`).join('');
   }
 
   list.addEventListener('input', e => {
-    const { keyword, reply } = e.target.dataset;
+    const { keyword, part } = e.target.dataset;
     if (keyword !== undefined) rows[+keyword].keyword = e.target.value;
-    if (reply !== undefined) rows[+reply].reply = e.target.value;
+    if (part === undefined) return;
+    const [i, j] = part.split(':').map(Number);
+    rows[i].parts[j] = e.target.value;
+    // Counted live rather than on save: the owner is pasting a long text and
+    // needs to see the ceiling coming, not be told about it afterwards.
+    const counter = list.querySelector(`[data-count="${i}:${j}"]`);
+    if (counter) {
+      counter.textContent = `${e.target.value.length} / ${limit}`;
+      counter.className = 'hint' + (e.target.value.length > limit ? ' hint--err' : '');
+    }
   });
   list.addEventListener('click', e => {
+    const addPart = e.target.closest('[data-addpart]');
+    if (addPart) {
+      rows[+addPart.dataset.addpart].parts.push('');
+      return render();
+    }
+    const delPart = e.target.closest('[data-delpart]');
+    if (delPart) {
+      const [i, j] = delPart.dataset.delpart.split(':').map(Number);
+      rows[i].parts.splice(j, 1);
+      return render();
+    }
     const del = e.target.closest('[data-del]');
     if (!del) return;
     rows.splice(+del.dataset.del, 1);
     render();
   });
   document.getElementById(prefix + 'AddBtn').addEventListener('click', () => {
-    rows.push({ keyword: '', reply: '' });
+    rows.push({ keyword: '', parts: [''] });
     render();
   });
   document.getElementById(prefix + 'SaveBtn').addEventListener('click', async () => {
-    const cleaned = rows.map(r => ({ keyword: r.keyword.trim(), reply: r.reply.trim() }));
+    const cleaned = rows.map(r => ({
+      keyword: r.keyword.trim(),
+      parts: r.parts.map(p => p.trim()).filter(Boolean),
+    }));
     // The API drops half-filled rows silently; saying so beforehand beats the
     // row quietly vanishing on save.
-    if (cleaned.some(r => Boolean(r.keyword) !== Boolean(r.reply))) {
+    if (cleaned.some(r => Boolean(r.keyword) !== Boolean(r.parts.length))) {
       msg.className = 'hint hint--err';
       msg.textContent = 'В строке нужны и слово, и текст ответа — иначе она не сохранится.';
       return;
     }
+    if (limit) {
+      const bad = cleaned.findIndex(r => r.parts.some(p => p.length > limit));
+      if (bad !== -1) {
+        msg.className = 'hint hint--err';
+        msg.textContent = `Ответ на «${cleaned[bad].keyword}»: одно сообщение длиннее ${limit} символов — Instagram его не примет. `
+          + 'Разбейте его кнопкой «+ Ещё сообщение следом».';
+        return;
+      }
+    }
     try {
-      rows = (await api(endpoint, { method: 'PUT', body: JSON.stringify({ replies: cleaned }) }))
-        .map(r => ({ keyword: r.keyword, reply: r.reply }));
+      rows = normalize(await api(endpoint, { method: 'PUT', body: JSON.stringify({ replies: cleaned }) }));
       render();
       msg.className = 'hint';
       msg.textContent = '';
@@ -999,9 +1058,20 @@ function replyEditor({ prefix, endpoint, keywordPlaceholder, replyPlaceholder, f
     }
   });
 
+  // Rows saved before the chain existed come back as one long text. Breaking
+  // them up on load — instead of leaving a row that cannot be saved — shows
+  // the owner exactly what the bot will send and lets them move the breaks.
+  function normalize(data) {
+    return data.map(r => {
+      const parts = (Array.isArray(r.parts) && r.parts.length ? r.parts : [r.reply]).map(String);
+      return { keyword: r.keyword, parts: limit ? parts.flatMap(p => splitLong(p, limit)) : [parts.join('\n\n')] };
+    });
+  }
+
   return async function load() {
+    let loaded;
     try {
-      rows = (await api(endpoint)).map(r => ({ keyword: r.keyword, reply: r.reply }));
+      loaded = normalize(await api(endpoint));
     } catch {
       // An empty editor looks like "nothing saved yet", which is the one thing
       // it must not look like when the list simply failed to load.
@@ -1011,11 +1081,32 @@ function replyEditor({ prefix, endpoint, keywordPlaceholder, replyPlaceholder, f
       msg.textContent = 'Не удалось загрузить ответы — сохранять сейчас нельзя, список затрёт то, что уже сохранено.';
       return;
     }
-    if (!rows.length && firstRow) rows = [{ ...firstRow }];
+    rows = loaded;
+    if (!rows.length && firstRow) rows = [{ ...firstRow, parts: [...firstRow.parts] }];
     msg.className = 'hint';
     msg.textContent = '';
     render();
   };
+}
+
+// Mirrors splitText in src/utils.js — breaks on the largest structure that
+// fits so a split text still reads as whole sentences.
+function splitLong(text, limit) {
+  const whole = String(text || '');
+  if (whole.length <= limit) return whole ? [whole] : [];
+  const chunks = [];
+  let rest = whole;
+  while (rest.length > limit) {
+    const head = rest.slice(0, limit + 1);
+    let cut = head.lastIndexOf('\n\n');
+    if (cut <= 0) cut = head.lastIndexOf('\n');
+    if (cut <= 0) cut = head.lastIndexOf(' ');
+    if (cut <= 0) cut = limit;
+    chunks.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) chunks.push(rest);
+  return chunks.filter(Boolean);
 }
 
 const loadIgReplies = replyEditor({
@@ -1023,9 +1114,45 @@ const loadIgReplies = replyEditor({
   endpoint: '/api/ig-replies',
   // Nothing saved yet: offer the row the salon actually needs, unsaved — the
   // posts tell people to write "+", so that is the keyword.
-  firstRow: { keyword: '+', reply: '' },
+  firstRow: { keyword: '+', parts: [''] },
   keywordPlaceholder: '+',
   replyPlaceholder: 'Здравствуйте! Маникюр — 1500 сом, записаться можно здесь: ...',
+  limit: 2000,
+});
+
+// The public answer under a closed account's comment. Its own little editor
+// rather than a row in the list above: it is not keyed on anything the
+// client wrote, it fires when Direct refuses us.
+async function loadIgClosedText() {
+  const field = document.getElementById('igClosedText');
+  const msg = document.getElementById('igClosedMsg');
+  try {
+    const { text } = await api('/api/ig-closed-dm');
+    field.value = text;
+    msg.className = 'hint';
+    msg.textContent = '';
+  } catch {
+    msg.className = 'hint hint--err';
+    msg.textContent = 'Не удалось загрузить текст — сохранять сейчас нельзя.';
+  }
+}
+
+document.getElementById('igClosedSaveBtn').addEventListener('click', async () => {
+  const field = document.getElementById('igClosedText');
+  const msg = document.getElementById('igClosedMsg');
+  try {
+    const { text } = await api('/api/ig-closed-dm', {
+      method: 'PUT',
+      body: JSON.stringify({ text: field.value.trim() }),
+    });
+    field.value = text;
+    msg.className = 'hint';
+    msg.textContent = '';
+    toast('Сохранено');
+  } catch {
+    msg.className = 'hint hint--err';
+    msg.textContent = 'Не получилось сохранить';
+  }
 });
 
 const loadWaReplies = replyEditor({

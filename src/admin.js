@@ -5,7 +5,7 @@ import { db } from './database.js';
 import { sendAddress } from './booking.js';
 import { SETTING_KEYS } from './salonInfo.js';
 import { sendText, getWaStatus } from './whatsapp.js';
-import { formatDateFull, getDayOfWeek } from './utils.js';
+import { formatDateFull, getDayOfWeek, splitText } from './utils.js';
 import {
   DEFAULT_STEP_MIN, findConflicts, getDaySchedule, getFreeSlots, previewSlots, serviceSlotOpts,
   validateIntervals,
@@ -13,7 +13,9 @@ import {
 import * as waitlist from './waitlist.js';
 import { authorizeAdmin, clerk } from './adminAuth.js';
 import { botEnabled, setBotEnabled } from './botState.js';
-import { instagramEnabled } from './instagram.js';
+import {
+  instagramEnabled, IG_MESSAGE_LIMIT, DEFAULT_CLOSED_DM_TEXT, CLOSED_DM_KEY, closedDmText,
+} from './instagram.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -305,6 +307,20 @@ adminRouter.get('/api/ig-status', (_req, res) => {
   res.json({ enabled: instagramEnabled });
 });
 
+// What the bot answers publicly under the comment of someone whose account
+// is closed — Direct is shut to us there, so this is the only thing that
+// reaches them. Empty means "back to the default", not "say nothing": a
+// silent bot under a comment asking for the price is worse than any wording.
+adminRouter.get('/api/ig-closed-dm', async (_req, res) => {
+  res.json({ text: await closedDmText(), default: DEFAULT_CLOSED_DM_TEXT });
+});
+
+adminRouter.put('/api/ig-closed-dm', async (req, res) => {
+  const text = String(req.body?.text || '').trim().slice(0, IG_MESSAGE_LIMIT);
+  await db.setIgConfig(CLOSED_DM_KEY, text || DEFAULT_CLOSED_DM_TEXT);
+  res.json({ text: await closedDmText(), default: DEFAULT_CLOSED_DM_TEXT });
+});
+
 // The whole list is saved at once: order decides which keyword wins, so
 // editing rows one by one would need a separate reorder call anyway.
 adminRouter.get('/api/ig-replies', async (_req, res) => {
@@ -312,7 +328,7 @@ adminRouter.get('/api/ig-replies', async (_req, res) => {
 });
 
 adminRouter.put('/api/ig-replies', async (req, res) => {
-  const cleaned = cleanReplies(req.body?.replies);
+  const cleaned = cleanReplies(req.body?.replies, IG_MESSAGE_LIMIT);
   if (!cleaned) return res.status(400).json({ error: 'missing_fields' });
   await db.saveIgReplies(cleaned);
   res.json(await db.getIgReplies());
@@ -335,11 +351,25 @@ adminRouter.put('/api/wa-replies', async (req, res) => {
 // Half-filled rows are dropped rather than rejected: the panel warns about
 // them before saving, and a row with no reply would answer with an empty
 // message. null means the body wasn't a list at all.
-function cleanReplies(replies) {
+//
+// An answer is a chain of messages the bot sends one after another. Older
+// panels (and the WhatsApp editor) send a single `reply` string instead, so
+// both shapes are accepted. `limit` caps one message: over it the text is
+// split here as a safety net, because a message Instagram refuses is worse
+// than one the owner didn't choose the break point for — the panel asks for
+// the break points first, so this normally has nothing to do.
+function cleanReplies(replies, limit = 0) {
   if (!Array.isArray(replies)) return null;
   return replies
-    .map(r => ({ keyword: String(r.keyword || '').trim(), reply: String(r.reply || '').trim() }))
-    .filter(r => r.keyword && r.reply);
+    .map(r => {
+      const raw = Array.isArray(r.parts) ? r.parts : [r.reply];
+      const parts = raw
+        .map(p => String(p || '').trim())
+        .filter(Boolean)
+        .flatMap(p => (limit ? splitText(p, limit) : [p]));
+      return { keyword: String(r.keyword || '').trim(), parts };
+    })
+    .filter(r => r.keyword && r.parts.length);
 }
 
 // ── Masters ───────────────────────────────────────────────────────────────

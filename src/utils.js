@@ -70,3 +70,28 @@ export const DAYS_FULL_EXPORT  = DAYS_FULL;
 export function formatPrice(value) {
   return `${Math.round(Number(value)).toLocaleString('ru-RU')} сом`;
 }
+
+// Instagram refuses a single direct message longer than 2000 characters
+// ("Length of param message[text] must be less than or equal to 2000"), so a
+// text that long has to leave as several messages. The owner picks the break
+// points in the panel; this is the safety net for everything already saved
+// before that existed, and it breaks on the largest structure that fits —
+// blank line, then line, then word, and only then mid-word.
+export function splitText(text, limit) {
+  const whole = String(text || '');
+  if (whole.length <= limit) return whole ? [whole] : [];
+
+  const chunks = [];
+  let rest = whole;
+  while (rest.length > limit) {
+    const head = rest.slice(0, limit + 1);
+    let cut = head.lastIndexOf('\n\n');
+    if (cut <= 0) cut = head.lastIndexOf('\n');
+    if (cut <= 0) cut = head.lastIndexOf(' ');
+    if (cut <= 0) cut = limit;
+    chunks.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) chunks.push(rest);
+  return chunks.filter(Boolean);
+}
