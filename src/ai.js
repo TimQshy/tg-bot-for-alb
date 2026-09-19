@@ -55,14 +55,16 @@ export async function chat({ messages, tools = null, temperature = 0.3 }) {
 }
 
 // Reused by the one-off chat-analysis script (src/scripts/analyzeChats.js)
-// with its own prompt.
-export async function askWithSystemPrompt(systemPrompt, userText) {
+// and by the Instagram AI (src/igAi.js), both with their own prompts.
+// `history` is earlier user/assistant turns; empty means a one-shot question.
+export async function askWithSystemPrompt(systemPrompt, userText, history = []) {
   if (!process.env.DEEPSEEK_API_KEY) return null;
 
   try {
     const message = await chat({
       messages: [
         { role: 'system', content: systemPrompt },
+        ...history,
         { role: 'user', content: userText },
       ],
     });

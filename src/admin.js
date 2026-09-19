@@ -334,6 +334,21 @@ adminRouter.put('/api/ig-replies', async (req, res) => {
   res.json(await db.getIgReplies());
 });
 
+// ── What the Instagram AI answers from ────────────────────────────────────
+// Free-form named blocks — «Цена курса», «Программа», «Как оплатить». The
+// panel reuses the auto-reply editor, so the wire shape is that editor's
+// keyword/reply pair and the mapping to title/body lives here.
+adminRouter.get('/api/ig-knowledge', async (_req, res) => {
+  res.json((await db.getIgKnowledge()).map(b => ({ keyword: b.title, reply: b.body })));
+});
+
+adminRouter.put('/api/ig-knowledge', async (req, res) => {
+  const cleaned = cleanReplies(req.body?.replies);
+  if (!cleaned) return res.status(400).json({ error: 'missing_fields' });
+  await db.saveIgKnowledge(cleaned.map(r => ({ title: r.keyword, body: r.parts.join('\n\n') })));
+  res.json((await db.getIgKnowledge()).map(b => ({ keyword: b.title, reply: b.body })));
+});
+
 // ── WhatsApp auto-replies ─────────────────────────────────────────────────
 // Same editor as Instagram's, but these texts answer WhatsApp clients before
 // the AI agent sees the message — see handleIncoming in webhook.js.

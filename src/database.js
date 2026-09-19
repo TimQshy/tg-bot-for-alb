@@ -218,6 +218,19 @@ CREATE TABLE IF NOT EXISTS wa_replies (
 ALTER TABLE ig_replies ADD COLUMN IF NOT EXISTS parts JSONB;
 ALTER TABLE wa_replies ADD COLUMN IF NOT EXISTS parts JSONB;
 
+-- What the Instagram AI knows. Free-form named blocks the owner adds in the
+-- panel — «Цена курса», «Программа», «Как оплатить» — pasted into the system
+-- prompt in this order. Deliberately not the salon settings table:
+-- Instagram is about the courses, and the manicure address has no business
+-- turning up in an answer about a course. No rows at all: the AI stays off.
+CREATE TABLE IF NOT EXISTS ig_knowledge (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT true
+);
+
 -- Delivered webhook events, so Meta's retries don't answer the same comment
 -- twice. Ids are prefixed by kind ("c:<comment id>", "m:<message id>").
 CREATE TABLE IF NOT EXISTS ig_events (
@@ -820,6 +833,37 @@ export const db = {
   async saveIgReplies(replies) { return replaceReplies('ig_replies', replies); },
   async getWaReplies() { return listReplies('wa_replies'); },
   async saveWaReplies(replies) { return replaceReplies('wa_replies', replies); },
+
+  // ── What the Instagram AI answers from ──────────────────────────────────
+  // Same "the whole list is rewritten at once" rule as the auto-replies: the
+  // order is what the model reads, so a row-by-row save would need a reorder
+  // call anyway.
+  async getIgKnowledge() {
+    const { rows } = await pool.query(
+      'SELECT * FROM ig_knowledge WHERE is_active=true ORDER BY position, id'
+    );
+    return rows;
+  },
+
+  async saveIgKnowledge(items) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM ig_knowledge');
+      for (const [i, item] of items.entries()) {
+        await client.query(
+          'INSERT INTO ig_knowledge (title, body, position) VALUES ($1,$2,$3)',
+          [item.title, item.body, i]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
 
   // True the first time an event id is seen, false on Meta's retries.
   async claimIgEvent(id) {

@@ -18,6 +18,7 @@ import express from 'express';
 import { db } from './database.js';
 import { botEnabled } from './botState.js';
 import { splitText } from './utils.js';
+import { answerQuestion } from './igAi.js';
 
 const GRAPH = 'https://graph.instagram.com/v21.0';
 
@@ -101,6 +102,16 @@ async function sendChain(recipient, parts) {
   return { ok: true };
 }
 
+// The AI's answer, shaped like a chain so both paths can treat it the same
+// way. It is always one message — the model is asked for one and the answer
+// is capped well under the 2000 Instagram allows.
+async function askAi(userId, text, history) {
+  const answer = await answerQuestion(userId, text, { history });
+  if (!answer) return null;
+  console.log(`[ig-ai] answered ${userId} (${answer.length} chars)`);
+  return [answer];
+}
+
 async function handleComment(value) {
   // The panel's emergency switch covers Instagram too — checked before the
   // event is claimed, so nothing is silently marked as handled.
@@ -112,7 +123,11 @@ async function handleComment(value) {
   if (author && author === (await myUsername())) return;
   if (!(await db.claimIgEvent(`c:${commentId}`))) return;
 
-  const parts = await matchReply(text);
+  // The keyword list gets first refusal: it is free, instant and says
+  // exactly what the owner wrote. Only a question it has no row for is
+  // worth an AI call — and if the AI has nothing either, the bot stays
+  // quiet, which is what it did before any of this existed.
+  const parts = (await matchReply(text)) || await askAi(value.from?.id || commentId, text, false);
   if (!parts?.length) return;
 
   // Exactly one message reaches a commenter, and this is it. A private reply
@@ -151,7 +166,9 @@ async function handleMessage(event) {
   const eventId = message.mid || `${senderId}:${event.timestamp}`;
   if (!(await db.claimIgEvent(`m:${eventId}`))) return;
 
-  const parts = await matchReply(message.text || '');
+  // In Direct the AI keeps the previous turns, because here the person can
+  // actually follow up — «а сколько длится?» means nothing on its own.
+  const parts = (await matchReply(message.text || '')) || await askAi(senderId, message.text, true);
   if (!parts?.length) return;
 
   const res = await sendChain({ id: senderId }, parts);

@@ -469,9 +469,16 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <button class="btn btn--ghost btn--block" id="igAddBtn" style="margin-top:12px">+ Добавить ответ</button>
       <button class="btn btn--primary btn--block" id="igSaveBtn" style="margin-top:10px">Сохранить</button>
       <p class="hint" id="igMsg"></p>
-      <p class="hint">Бот идёт по списку сверху вниз и отвечает первым подошедшим текстом. Слово ищется внутри сообщения, регистр не важен: «+» сработает и на «+», и на «+ сколько стоит». Звёздочка <b>*</b> подходит к чему угодно — держите её последней. Если не подошло ничего, бот молчит.</p>
+      <p class="hint">Бот идёт по списку сверху вниз и отвечает первым подошедшим текстом. Слово ищется внутри сообщения, регистр не важен: «+» сработает и на «+», и на «+ сколько стоит». Звёздочка <b>*</b> подходит к чему угодно — держите её последней, и учтите, что после неё ИИ не ответит уже никогда. Если не подошло ничего, за дело берётся ИИ — см. «Что бот знает» ниже.</p>
       <p class="hint">Instagram не принимает сообщение длиннее 2000 символов. Длинный ответ разбейте сами кнопкой «+ Ещё сообщение следом» — бот отправит их одно за другим, сверху вниз.</p>
       <p class="hint"><b>На комментарий Instagram разрешает ответить только одним сообщением.</b> Тому, кто пришёл из комментария, уйдёт только «Сообщение 1» — остальные бот отправить не может, пока человек не напишет в директ сам. Поэтому первое сообщение должно читаться само по себе: расскажите главное и позовите написать в директ. Целиком цепочка уходит тем, кто пишет в директ.</p>
+
+      <h2 class="subhead">Что бот знает</h2>
+      <p class="hint" style="margin-bottom:10px">Справка для ИИ: он отвечает на вопросы, под которые нет готового ответа выше — и в комментариях, и в директе. Добавьте сюда всё, что он должен знать: цену курса, программу, длительность, формат, как оплатить, адрес. Отвечает он только из этих блоков и ничего не додумывает; чего здесь нет — предложит написать в директ. Пусто — ИИ молчит, работают только готовые ответы выше.</p>
+      <div id="igKbList"></div>
+      <button class="btn btn--ghost btn--block" id="igKbAddBtn" style="margin-top:12px">+ Добавить блок</button>
+      <button class="btn btn--primary btn--block" id="igKbSaveBtn" style="margin-top:10px">Сохранить</button>
+      <p class="hint" id="igKbMsg"></p>
 
       <h2 class="subhead">Если аккаунт закрытый</h2>
       <div class="card" style="padding:16px">
@@ -872,7 +879,7 @@ function goto(name) {
   document.getElementById('fabAdd').hidden = name !== 'zapisi';
   if (name === 'mastera') loadMasters();
   if (name === 'salon') { loadServices(); loadSettings(); }
-  if (name === 'instagram') { loadIgReplies(); loadIgClosedText(); }
+  if (name === 'instagram') { loadIgReplies(); loadIgKnowledge(); loadIgClosedText(); }
   if (name === 'sysadmin') { loadBotState(); loadAccess(); }
   if (name === 'whatsapp') { startWaPolling(); loadWaReplies(); } else stopWaPolling();
 }
@@ -963,14 +970,17 @@ function stopWaPolling() {
 // and the owner is the one who knows where a long text should break — so
 // the editor makes them pick the break points instead of cutting for them.
 // `limit` = 0 turns the chain off entirely (WhatsApp has no such ceiling).
-function replyEditor({ prefix, endpoint, keywordPlaceholder, replyPlaceholder, firstRow, limit = 0 }) {
+function replyEditor({
+  prefix, endpoint, keywordPlaceholder, replyPlaceholder, firstRow, limit = 0,
+  keyLabel = 'Слово в сообщении', valueLabel = 'Что отправить',
+}) {
   const list = document.getElementById(prefix + 'List');
   const msg = document.getElementById(prefix + 'Msg');
   let rows = [];
 
   function partLabel(j, many) {
-    if (!limit) return 'Что отправить';
-    if (!many) return 'Что отправить';
+    if (!limit) return valueLabel;
+    if (!many) return valueLabel;
     // Instagram lets us answer a commenter exactly once, so message 1 is the
     // whole answer for everyone who came from a comment. Saying it on the
     // field itself, not only in the hint below, is the difference between
@@ -996,11 +1006,11 @@ function replyEditor({ prefix, endpoint, keywordPlaceholder, replyPlaceholder, f
   function render() {
     list.innerHTML = rows.map((r, i) => `
     <div class="card" style="padding:16px;margin-bottom:10px">
-      <label class="field"><span class="field__label">Слово в сообщении</span>
+      <label class="field"><span class="field__label">${escapeHtml(keyLabel)}</span>
         <input class="input" data-keyword="${i}" value="${escapeHtml(r.keyword)}" placeholder="${escapeHtml(keywordPlaceholder)}"></label>
       ${r.parts.map((_, j) => partHtml(r, i, j)).join('')}
       ${limit ? `<button class="btn btn--ghost btn--block" data-addpart="${i}" style="margin-bottom:10px">+ Ещё сообщение следом</button>` : ''}
-      <button class="btn btn--danger btn--block" data-del="${i}">Удалить ответ</button>
+      <button class="btn btn--danger btn--block" data-del="${i}">Удалить</button>
     </div>`).join('');
   }
 
@@ -1167,6 +1177,20 @@ document.getElementById('igClosedSaveBtn').addEventListener('click', async () =>
     msg.className = 'hint hint--err';
     msg.textContent = 'Не получилось сохранить';
   }
+});
+
+// The AI's knowledge base. Same editor as the auto-replies — an ordered list
+// of named texts is the same thing to edit — with the labels renamed and the
+// chain off: a preset block is read by the model, not sent to anyone, so the
+// 2000-character message limit has nothing to do with it.
+const loadIgKnowledge = replyEditor({
+  prefix: 'igKb',
+  endpoint: '/api/ig-knowledge',
+  firstRow: null,
+  keyLabel: 'Название блока',
+  valueLabel: 'Что бот должен знать',
+  keywordPlaceholder: 'Цена курса',
+  replyPlaceholder: 'Курс стоит 12 000 сом. Оплата частями: 6 000 при старте и 6 000 через месяц.',
 });
 
 const loadWaReplies = replyEditor({
