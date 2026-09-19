@@ -63,6 +63,18 @@ app.get('/privacy', (_req, res) => {
 app.use('/admin', adminRouter);
 app.use('/s/:slug/admin', adminRouter);
 
+// First row whose keyword occurs in the message wins, so the panel's order
+// is the priority order. '*' matches anything and belongs last.
+async function matchWaReply(text) {
+  const lower = text.toLowerCase();
+  for (const row of await db.getWaReplies()) {
+    const keyword = row.keyword.trim().toLowerCase();
+    if (!keyword) continue;
+    if (keyword === '*' || lower.includes(keyword)) return row.reply;
+  }
+  return null;
+}
+
 // ── Inbound messages — called by whatsapp.js for every incoming chat message ─
 export async function handleIncoming(phone, { text, profileName }) {
   await db.upsertUser({ id: phone, name: profileName || null });
@@ -140,6 +152,16 @@ export async function handleIncoming(phone, { text, profileName }) {
   }
 
   if (!trimmed) return booking.sendMainMenu(phone);
+
+  // Fixed answers the salon edits in the panel. Checked before the agent so
+  // a question with a known answer ("прайс", "адрес") costs nothing and
+  // always reads the same; a '*' keyword therefore silences the agent
+  // entirely, which the panel says next to the editor.
+  const canned = await matchWaReply(trimmed);
+  if (canned) {
+    console.log(`[autoreply] replied to ${phone}`);
+    return sendText(phone, canned);
+  }
 
   // Free text: the conversational agent books, moves and cancels on its own.
   // Without a DeepSeek key it degrades to the FAQ-only answer, and that to

@@ -199,6 +199,17 @@ CREATE TABLE IF NOT EXISTS ig_replies (
   is_active BOOLEAN NOT NULL DEFAULT true
 );
 
+-- WhatsApp auto-replies: same shape and same first-match-wins rule as
+-- ig_replies, but read by webhook.js before the AI agent gets the message —
+-- a matching keyword answers with a fixed text and the agent stays out.
+CREATE TABLE IF NOT EXISTS wa_replies (
+  id SERIAL PRIMARY KEY,
+  keyword TEXT NOT NULL,
+  reply TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT true
+);
+
 -- Delivered webhook events, so Meta's retries don't answer the same comment
 -- twice. Ids are prefixed by kind ("c:<comment id>", "m:<message id>").
 CREATE TABLE IF NOT EXISTS ig_events (
@@ -224,6 +235,37 @@ CREATE TABLE IF NOT EXISTS ig_config (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 `;
+
+// Shared by the ig_replies / wa_replies helpers on db. Callers pass one of
+// those two literals — nothing here comes from a request.
+async function listReplies(table) {
+  const { rows } = await pool.query(
+    `SELECT * FROM ${table} WHERE is_active=true ORDER BY position, id`
+  );
+  return rows;
+}
+
+// The whole list is rewritten at once: order decides which keyword wins, so
+// row-by-row edits would need a separate reorder call anyway.
+async function replaceReplies(table, replies) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM ${table}`);
+    for (const [i, r] of replies.entries()) {
+      await client.query(
+        `INSERT INTO ${table} (keyword, reply, position) VALUES ($1,$2,$3)`,
+        [r.keyword, r.reply, i]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
 
 export const db = {
   async init() {
@@ -752,33 +794,14 @@ export const db = {
     await pool.query('DELETE FROM wa_auth WHERE id=$1', [id]);
   },
 
-  // ── Instagram auto-replies (see src/instagram.js) ───────────────────────
-  async getIgReplies() {
-    const { rows } = await pool.query(
-      'SELECT * FROM ig_replies WHERE is_active=true ORDER BY position, id'
-    );
-    return rows;
-  },
-
-  async saveIgReplies(replies) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query('DELETE FROM ig_replies');
-      for (const [i, r] of replies.entries()) {
-        await client.query(
-          'INSERT INTO ig_replies (keyword, reply, position) VALUES ($1,$2,$3)',
-          [r.keyword, r.reply, i]
-        );
-      }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-  },
+  // ── Auto-replies: Instagram (src/instagram.js) and WhatsApp (webhook.js) ─
+  // Both lists have the same shape and the same first-match-wins rule, so
+  // one pair of helpers serves both tables. The table name is picked from
+  // the two literals below and never from a request.
+  async getIgReplies() { return listReplies('ig_replies'); },
+  async saveIgReplies(replies) { return replaceReplies('ig_replies', replies); },
+  async getWaReplies() { return listReplies('wa_replies'); },
+  async saveWaReplies(replies) { return replaceReplies('wa_replies', replies); },
 
   // True the first time an event id is seen, false on Meta's retries.
   async claimIgEvent(id) {

@@ -312,14 +312,35 @@ adminRouter.get('/api/ig-replies', async (_req, res) => {
 });
 
 adminRouter.put('/api/ig-replies', async (req, res) => {
-  const replies = Array.isArray(req.body?.replies) ? req.body.replies : null;
-  if (!replies) return res.status(400).json({ error: 'missing_fields' });
-  const cleaned = replies
-    .map(r => ({ keyword: String(r.keyword || '').trim(), reply: String(r.reply || '').trim() }))
-    .filter(r => r.keyword && r.reply);
+  const cleaned = cleanReplies(req.body?.replies);
+  if (!cleaned) return res.status(400).json({ error: 'missing_fields' });
   await db.saveIgReplies(cleaned);
   res.json(await db.getIgReplies());
 });
+
+// ── WhatsApp auto-replies ─────────────────────────────────────────────────
+// Same editor as Instagram's, but these texts answer WhatsApp clients before
+// the AI agent sees the message — see handleIncoming in webhook.js.
+adminRouter.get('/api/wa-replies', async (_req, res) => {
+  res.json(await db.getWaReplies());
+});
+
+adminRouter.put('/api/wa-replies', async (req, res) => {
+  const cleaned = cleanReplies(req.body?.replies);
+  if (!cleaned) return res.status(400).json({ error: 'missing_fields' });
+  await db.saveWaReplies(cleaned);
+  res.json(await db.getWaReplies());
+});
+
+// Half-filled rows are dropped rather than rejected: the panel warns about
+// them before saving, and a row with no reply would answer with an empty
+// message. null means the body wasn't a list at all.
+function cleanReplies(replies) {
+  if (!Array.isArray(replies)) return null;
+  return replies
+    .map(r => ({ keyword: String(r.keyword || '').trim(), reply: String(r.reply || '').trim() }))
+    .filter(r => r.keyword && r.reply);
+}
 
 // ── Masters ───────────────────────────────────────────────────────────────
 // A master who has never been booked can be deleted outright; once there are

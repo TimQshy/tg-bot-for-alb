@@ -204,7 +204,18 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
 .sheet__title{font-family:var(--font-head);font-size:17px;font-weight:700;letter-spacing:-.02em;flex:1}
 .sheet__body{padding:14px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .sheet__foot{padding:12px 16px 16px;border-top:1px solid var(--line);flex:0 0 auto;display:grid;grid-template-columns:1fr 1.4fr;gap:10px}
-@media (min-width:900px){.sheet{left:50%;transform:translateX(-50%);width:460px;bottom:24px;border-radius:22px}}
+/* Та же шторка, но приезжает сверху — из-под иконки, которая её открыла. */
+.sheet--top{top:0;bottom:auto;border-radius:0 0 22px 22px;padding-top:var(--safe-t);padding-bottom:8px;box-shadow:0 8px 40px rgba(24,34,32,.16)}
+:root[data-theme="dark"] .sheet--top{box-shadow:0 8px 40px rgba(0,0,0,.55)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sheet--top{box-shadow:0 8px 40px rgba(0,0,0,.55)}}
+.sheet--top .sheet__grab{margin:0 auto 4px}
+@media (min-width:900px){
+  .sheet{left:50%;transform:translateX(-50%);width:460px;bottom:24px;border-radius:22px}
+  .sheet--top{top:24px;bottom:auto;border-radius:22px}
+}
+/* Возврат к списку с карточки мастера. */
+.backbtn{display:inline-flex;align-items:center;gap:2px;min-height:var(--tap);margin-left:-6px;padding:0 6px;color:var(--ink-2);font-size:14px;font-weight:500}
+.backbtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .sheet__ctx{display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--surface-2);border-radius:var(--r-sm);margin-bottom:16px}
 .sheet__ctx .old{font-family:var(--font-num);font-size:13px;color:var(--ink-3);text-decoration:line-through}
 .slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(82px,1fr));gap:8px}
@@ -307,22 +318,16 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
     <div class="brand"><span class="brand__name">Админка салона</span></div>
     <button class="snav" data-goto="zapisi" aria-selected="true">
       <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Записи</button>
-    <button class="snav" data-goto="uslugi" aria-selected="false">
-      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Услуги</button>
     <button class="snav" data-goto="mastera" aria-selected="false">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>Мастера</button>
-    <button class="snav" data-goto="chasy" aria-selected="false">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Часы работы</button>
     <button class="snav" data-goto="salon" aria-selected="false">
-      <svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Салон</button>
+      <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></svg>Салон</button>
     <button class="snav" data-goto="whatsapp" aria-selected="false">
       <svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-5.9A8.5 8.5 0 1 1 21 11.5z"/></svg>WhatsApp</button>
     <button class="snav" data-goto="instagram" aria-selected="false">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>Instagram</button>
-    <button class="snav" data-goto="bot" aria-selected="false">
-      <svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="4"/><path d="M12 4v4M9 14h.01M15 14h.01"/></svg>Бот</button>
-    <button class="snav" data-goto="dostupy" aria-selected="false">
-      <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Доступы</button>
+    <button class="snav" data-goto="sysadmin" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>Сис-админ</button>
   </nav>
 
   <div>
@@ -331,14 +336,11 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
         <div class="brand"><span class="brand__name">Админка салона</span><span class="brand__sub" id="todayLabel"></span></div>
         <span class="appbar__spacer"></span>
         <select class="salonpick" id="salonPick" aria-label="Салон" hidden></select>
-        <button class="iconbtn" id="themeBtn" aria-label="Сменить тему">
-          <svg viewBox="0 0 24 24"><path d="M21 13a8.5 8.5 0 1 1-10-10 7 7 0 0 0 10 10z"/></svg>
-        </button>
         <button class="iconbtn" id="refreshBtn" aria-label="Обновить">
           <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-.6 4"/><path d="M20 5v6h-6"/></svg>
         </button>
-        <button class="iconbtn" id="logoutBtn" aria-label="Выйти">
-          <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+        <button class="iconbtn" id="profileBtn" data-sheet="sheet-profile" aria-label="Профиль">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
         </button>
       </div>
     </header>
@@ -365,13 +367,6 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       </div>
     </main>
 
-    <!-- ================= УСЛУГИ ================= -->
-    <main class="col screen" id="screen-uslugi" hidden>
-      <div class="screen-head"><h1>Услуги</h1><p id="uslugiSub"></p></div>
-      <div class="card" id="servicesCard"></div>
-      <button class="btn btn--primary btn--block" id="addServiceBtn" style="margin-top:14px">+ Добавить услугу</button>
-    </main>
-
     <!-- ================= МАСТЕРА ================= -->
     <main class="col screen" id="screen-mastera" hidden>
       <div class="screen-head"><h1>Мастера</h1><p id="masteraSub"></p></div>
@@ -379,10 +374,30 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <button class="btn btn--primary btn--block" id="addMasterBtn" style="margin-top:14px">+ Добавить мастера</button>
     </main>
 
-    <!-- ================= ЧАСЫ РАБОТЫ ================= -->
-    <main class="col screen" id="screen-chasy" hidden>
-      <div class="screen-head"><h1>Часы работы</h1><p>Слоты для онлайн-записи считаются из этого графика</p></div>
-      <div class="filters" id="hoursMasterChips" role="group" aria-label="Мастер"></div>
+    <!-- ============ КАРТОЧКА МАСТЕРА: профиль + часы работы ============ -->
+    <main class="col screen" id="screen-master" hidden>
+      <div class="screen-head">
+        <button class="backbtn" id="masterBackBtn">
+          <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>Мастера</button>
+        <h1 id="mstTitle">Мастер</h1>
+        <p id="mstSub"></p>
+      </div>
+
+      <div class="card" style="padding:16px">
+        <label class="field"><span class="field__label">Имя</span>
+          <input class="input" id="mstName" placeholder="Айгуль"></label>
+        <label class="field"><span class="field__label">Специализация</span>
+          <input class="input" id="mstDesc" placeholder="маникюр, педикюр"></label>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+          <button class="switch" role="switch" id="mstActive" aria-checked="true"></button>
+          <span class="field__label" style="margin:0">Принимает записи</span>
+        </label>
+        <button class="btn btn--primary btn--block" id="mstSubmitBtn">Сохранить</button>
+        <p class="hint" id="mstHint"></p>
+      </div>
+
+      <h2 class="subhead">График работы</h2>
+      <p class="hint" style="margin:-4px 0 10px">Слоты для онлайн-записи считаются из этого графика</p>
       <div class="seg" id="hoursViewSeg" role="tablist" aria-label="Вид графика">
         <button class="seg__btn" role="tab" data-view="week" aria-selected="true">Неделя</button>
         <button class="seg__btn" role="tab" data-view="calendar" aria-selected="false">Календарь</button>
@@ -407,11 +422,18 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
         </div>
         <div class="card daycard" id="calDayCard" style="margin-top:12px"></div>
       </div>
+
+      <button class="btn btn--danger btn--block" id="mstDeleteBtn" style="margin-top:22px">Удалить мастера</button>
     </main>
 
-    <!-- ================= САЛОН ================= -->
+    <!-- ============= САЛОН: услуги и адрес ============= -->
     <main class="col screen" id="screen-salon" hidden>
-      <div class="screen-head"><h1>Салон</h1><p>Это отправляется клиенту сразу после подтверждения записи</p></div>
+      <div class="screen-head"><h1>Салон</h1><p id="uslugiSub"></p></div>
+      <div class="card" id="servicesCard"></div>
+      <button class="btn btn--primary btn--block" id="addServiceBtn" style="margin-top:14px">+ Добавить услугу</button>
+
+      <h2 class="subhead">Адрес</h2>
+      <p class="hint" style="margin:-4px 0 10px">Это отправляется клиенту сразу после подтверждения записи</p>
       <div class="card" style="padding:16px">
         <label class="field"><span class="field__label">Адрес</span>
           <input class="input" id="setAddress" placeholder="г. Бишкек, ул. Киевская 95, 2 этаж"></label>
@@ -431,6 +453,13 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
     <main class="col screen" id="screen-whatsapp" hidden>
       <div class="screen-head"><h1>WhatsApp</h1><p>Номер салона подключается как связанное устройство</p></div>
       <div class="card wa-card" id="waCard"></div>
+
+      <h2 class="subhead">Автоответы</h2>
+      <div id="waList"></div>
+      <button class="btn btn--ghost btn--block" id="waAddBtn" style="margin-top:12px">+ Добавить ответ</button>
+      <button class="btn btn--primary btn--block" id="waSaveBtn" style="margin-top:10px">Сохранить</button>
+      <p class="hint" id="waMsg"></p>
+      <p class="hint">Бот идёт по списку сверху вниз и отвечает первым подошедшим текстом — до того, как за дело возьмётся ИИ-консультант. Слово ищется внутри сообщения, регистр не важен. Звёздочка <b>*</b> подходит к чему угодно: поставьте её последней, и учтите, что после неё консультант не ответит уже никогда. Если не подошло ничего, отвечает консультант, как и раньше.</p>
     </main>
 
     <!-- ================= INSTAGRAM ================= -->
@@ -443,9 +472,12 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <p class="hint">Бот идёт по списку сверху вниз и отвечает первым подошедшим текстом. Слово ищется внутри сообщения, регистр не важен: «+» сработает и на «+», и на «+ сколько стоит». Звёздочка <b>*</b> подходит к чему угодно — держите её последней. Если не подошло ничего, бот молчит.</p>
     </main>
 
-    <!-- ================= БОТ ================= -->
-    <main class="col screen" id="screen-bot" hidden>
-      <div class="screen-head"><h1>Бот</h1><p>Аварийный выключатель этого салона</p></div>
+    <!-- ====== СИС-АДМИН: выключатель бота и доступы ====== -->
+    <!-- Раздаёт доступы и глушит бота не салон, а мы: экран целиком
+         удаляется у всех, кроме системного админа (см. initAuth). -->
+    <main class="col screen" id="screen-sysadmin" hidden>
+      <div class="screen-head"><h1>Сис-админ</h1><p>То, что салону не отдаём: аварийный выключатель и доступы</p></div>
+
       <div class="card" style="padding:0">
         <div class="row">
           <span class="row__main">
@@ -456,11 +488,9 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
         </div>
       </div>
       <p class="hint">Выключенный бот молчит везде: не отвечает в WhatsApp, не шлёт напоминания о визитах и не отвечает на комментарии в Instagram. Входящие сообщения всё равно сохраняются, записи и эта панель работают как обычно.</p>
-    </main>
 
-    <!-- ================= ДОСТУПЫ ================= -->
-    <main class="col screen" id="screen-dostupy" hidden>
-      <div class="screen-head"><h1>Доступы</h1><p>Можно пригласить заранее, а можно выдать доступ тому, кто зарегистрировался сам</p></div>
+      <h2 class="subhead">Доступы</h2>
+      <p class="hint" style="margin:-4px 0 10px">Можно пригласить заранее, а можно выдать доступ тому, кто зарегистрировался сам</p>
       <div class="card invite-card">
         <label class="field"><span class="field__label">Почта</span>
           <input class="input" id="invEmail" type="email" placeholder="owner@salon.kg" autocomplete="off"></label>
@@ -484,22 +514,16 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
 <nav class="tabbar" role="tablist" aria-label="Разделы">
   <button class="tab" role="tab" aria-selected="true" data-goto="zapisi">
     <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Записи</button>
-  <button class="tab" role="tab" aria-selected="false" data-goto="uslugi">
-    <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Услуги</button>
   <button class="tab" role="tab" aria-selected="false" data-goto="mastera">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>Мастера</button>
-  <button class="tab" role="tab" aria-selected="false" data-goto="chasy">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Часы</button>
   <button class="tab" role="tab" aria-selected="false" data-goto="salon">
-    <svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Салон</button>
+    <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></svg>Салон</button>
   <button class="tab" role="tab" aria-selected="false" data-goto="whatsapp">
     <svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-5.9A8.5 8.5 0 1 1 21 11.5z"/></svg>WhatsApp</button>
   <button class="tab" role="tab" aria-selected="false" data-goto="instagram">
     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>Insta</button>
-  <button class="tab" role="tab" aria-selected="false" data-goto="bot">
-    <svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="4"/><path d="M12 4v4M9 14h.01M15 14h.01"/></svg>Бот</button>
-  <button class="tab" role="tab" aria-selected="false" data-goto="dostupy">
-    <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Доступы</button>
+  <button class="tab" role="tab" aria-selected="false" data-goto="sysadmin">
+    <svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>Сис-админ</button>
 </nav>
 
 <!-- ================= ШТОРКИ ================= -->
@@ -648,25 +672,49 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
   </div>
 </div>
 
-<div class="sheet" id="sheet-masteredit" hidden role="dialog" aria-modal="true" aria-labelledby="mstTitle">
+<!-- Создание: всё остальное про мастера правится на его экране. -->
+<div class="sheet" id="sheet-masternew" hidden role="dialog" aria-modal="true" aria-labelledby="mstNewTitle">
   <div class="sheet__grab"></div>
-  <div class="sheet__head"><h2 class="sheet__title" id="mstTitle">Мастер</h2>
+  <div class="sheet__head"><h2 class="sheet__title" id="mstNewTitle">Новый мастер</h2>
     <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
   <div class="sheet__body">
-    <label class="field"><span class="field__label">Имя</span><input class="input" id="mstName" placeholder="Айгуль"></label>
+    <label class="field"><span class="field__label">Имя</span><input class="input" id="mstNewName" placeholder="Айгуль"></label>
     <label class="field"><span class="field__label">Специализация</span>
-      <input class="input" id="mstDesc" placeholder="маникюр, педикюр"></label>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-      <button class="switch" role="switch" id="mstActive" aria-checked="true"></button>
-      <span class="field__label" style="margin:0">Принимает записи</span>
-    </label>
-    <p class="hint" id="mstHint"></p>
-    <button class="btn btn--danger btn--block" id="mstDeleteBtn" style="margin-top:16px" hidden>Удалить мастера</button>
+      <input class="input" id="mstNewDesc" placeholder="маникюр, педикюр"></label>
+    <p class="hint" id="mstNewHint">Часы работы зададите сразу после — на карточке мастера.</p>
   </div>
   <div class="sheet__foot">
     <button class="btn btn--ghost" data-close>Отмена</button>
-    <button class="btn btn--primary" id="mstSubmitBtn">Сохранить</button>
+    <button class="btn btn--primary" id="mstNewSubmitBtn">Добавить</button>
   </div>
+</div>
+
+<!-- Профиль: выезжает сверху, под иконкой, которая её открывает. -->
+<div class="sheet sheet--top" id="sheet-profile" hidden role="dialog" aria-modal="true" aria-labelledby="prfTitle">
+  <div class="sheet__head"><h2 class="sheet__title" id="prfTitle">Профиль</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body" style="padding-top:4px">
+    <div class="card" style="padding:0">
+      <div class="row">
+        <span class="row__main">
+          <span class="row__title" id="prfSalon">Салон</span>
+          <span class="row__sub" id="prfEmail"></span>
+        </span>
+      </div>
+      <button class="row" id="themeBtn">
+        <span class="row__main">
+          <span class="row__title">Тема</span>
+          <span class="row__sub" id="themeSub">Светлая</span>
+        </span>
+        <svg class="row__chev" viewBox="0 0 24 24" id="themeIcon"><path d="M21 13a8.5 8.5 0 1 1-10-10 7 7 0 0 0 10 10z"/></svg>
+      </button>
+      <button class="row" id="logoutBtn">
+        <span class="row__main"><span class="row__title" style="color:#C0392B">Выйти</span></span>
+        <svg class="row__chev" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="sheet__grab"></div>
 </div>
 
 <!-- One confirm sheet for everything that cannot be undone; openConfirm
@@ -803,19 +851,19 @@ const state = {
 // ── Screens ────────────────────────────────────────────────────────────
 function goto(name) {
   document.querySelectorAll('.screen').forEach(s => s.hidden = (s.id !== 'screen-' + name));
-  document.querySelectorAll('[data-goto]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.goto === name)));
+  // The master card has no tab of its own — it is a level below the list, so
+  // the list's tab stays lit while it is open.
+  const tab = name === 'master' ? 'mastera' : name;
+  document.querySelectorAll('[data-goto]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.goto === tab)));
   window.scrollTo({ top: 0 });
   // The FAB creates an appointment, so it only belongs on the bookings
   // screen — elsewhere it just sits on top of the content.
   document.getElementById('fabAdd').hidden = name !== 'zapisi';
-  if (name === 'uslugi') loadServices();
   if (name === 'mastera') loadMasters();
-  if (name === 'chasy') loadHoursScreen();
-  if (name === 'dostupy') loadAccess();
-  if (name === 'salon') loadSettings();
+  if (name === 'salon') { loadServices(); loadSettings(); }
   if (name === 'instagram') loadIgReplies();
-  if (name === 'bot') loadBotState();
-  name === 'whatsapp' ? startWaPolling() : stopWaPolling();
+  if (name === 'sysadmin') { loadBotState(); loadAccess(); }
+  if (name === 'whatsapp') { startWaPolling(); loadWaReplies(); } else stopWaPolling();
 }
 document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => goto(b.dataset.goto)));
 
@@ -894,67 +942,99 @@ function stopWaPolling() {
   if (waTimer) { clearInterval(waTimer); waTimer = null; }
 }
 
-// ── Instagram: тексты автоответов ──────────────────────────────────────
-// Edited and saved as one list: its order decides which keyword wins, so
-// there is nothing meaningful to save row by row.
-let igRows = [];
+// ── Автоответы: Instagram и WhatsApp ───────────────────────────────────
+// Оба списка правятся и сохраняются целиком: порядок решает, какое слово
+// сработает первым, так что построчного сохранения тут быть не может.
+// Один редактор на два экрана — разница только в адресе API и подсказках.
+function replyEditor({ prefix, endpoint, keywordPlaceholder, replyPlaceholder, firstRow }) {
+  const list = document.getElementById(prefix + 'List');
+  const msg = document.getElementById(prefix + 'Msg');
+  let rows = [];
 
-function renderIgRows() {
-  document.getElementById('igList').innerHTML = igRows.map((r, i) => `
+  function render() {
+    list.innerHTML = rows.map((r, i) => `
     <div class="card" style="padding:16px;margin-bottom:10px">
       <label class="field"><span class="field__label">Слово в сообщении</span>
-        <input class="input" data-ig-keyword="${i}" value="${escapeHtml(r.keyword)}" placeholder="+"></label>
+        <input class="input" data-keyword="${i}" value="${escapeHtml(r.keyword)}" placeholder="${escapeHtml(keywordPlaceholder)}"></label>
       <label class="field"><span class="field__label">Что отправить</span>
-        <textarea class="input input--area" data-ig-reply="${i}" placeholder="Здравствуйте! Маникюр — 1500 сом, записаться можно здесь: ...">${escapeHtml(r.reply)}</textarea></label>
-      <button class="btn btn--danger btn--block" data-ig-del="${i}">Удалить</button>
+        <textarea class="input input--area" data-reply="${i}" placeholder="${escapeHtml(replyPlaceholder)}">${escapeHtml(r.reply)}</textarea></label>
+      <button class="btn btn--danger btn--block" data-del="${i}">Удалить</button>
     </div>`).join('');
-}
-
-document.getElementById('igList').addEventListener('input', e => {
-  const { igKeyword, igReply } = e.target.dataset;
-  if (igKeyword !== undefined) igRows[+igKeyword].keyword = e.target.value;
-  if (igReply !== undefined) igRows[+igReply].reply = e.target.value;
-});
-document.getElementById('igList').addEventListener('click', e => {
-  const del = e.target.closest('[data-ig-del]');
-  if (!del) return;
-  igRows.splice(+del.dataset.igDel, 1);
-  renderIgRows();
-});
-document.getElementById('igAddBtn').addEventListener('click', () => {
-  igRows.push({ keyword: '', reply: '' });
-  renderIgRows();
-});
-document.getElementById('igSaveBtn').addEventListener('click', async () => {
-  const msg = document.getElementById('igMsg');
-  const cleaned = igRows.map(r => ({ keyword: r.keyword.trim(), reply: r.reply.trim() }));
-  // The API drops half-filled rows silently; saying so beforehand beats the
-  // row quietly vanishing on save.
-  if (cleaned.some(r => Boolean(r.keyword) !== Boolean(r.reply))) {
-    msg.className = 'hint hint--err';
-    msg.textContent = 'В строке нужны и слово, и текст ответа — иначе она не сохранится.';
-    return;
   }
-  try {
-    igRows = (await api('/api/ig-replies', { method: 'PUT', body: JSON.stringify({ replies: cleaned }) }))
-      .map(r => ({ keyword: r.keyword, reply: r.reply }));
-    renderIgRows();
+
+  list.addEventListener('input', e => {
+    const { keyword, reply } = e.target.dataset;
+    if (keyword !== undefined) rows[+keyword].keyword = e.target.value;
+    if (reply !== undefined) rows[+reply].reply = e.target.value;
+  });
+  list.addEventListener('click', e => {
+    const del = e.target.closest('[data-del]');
+    if (!del) return;
+    rows.splice(+del.dataset.del, 1);
+    render();
+  });
+  document.getElementById(prefix + 'AddBtn').addEventListener('click', () => {
+    rows.push({ keyword: '', reply: '' });
+    render();
+  });
+  document.getElementById(prefix + 'SaveBtn').addEventListener('click', async () => {
+    const cleaned = rows.map(r => ({ keyword: r.keyword.trim(), reply: r.reply.trim() }));
+    // The API drops half-filled rows silently; saying so beforehand beats the
+    // row quietly vanishing on save.
+    if (cleaned.some(r => Boolean(r.keyword) !== Boolean(r.reply))) {
+      msg.className = 'hint hint--err';
+      msg.textContent = 'В строке нужны и слово, и текст ответа — иначе она не сохранится.';
+      return;
+    }
+    try {
+      rows = (await api(endpoint, { method: 'PUT', body: JSON.stringify({ replies: cleaned }) }))
+        .map(r => ({ keyword: r.keyword, reply: r.reply }));
+      render();
+      msg.className = 'hint';
+      msg.textContent = '';
+      toast('Сохранено');
+    } catch {
+      msg.className = 'hint hint--err';
+      msg.textContent = 'Не получилось сохранить';
+    }
+  });
+
+  return async function load() {
+    try {
+      rows = (await api(endpoint)).map(r => ({ keyword: r.keyword, reply: r.reply }));
+    } catch {
+      // An empty editor looks like "nothing saved yet", which is the one thing
+      // it must not look like when the list simply failed to load.
+      rows = [];
+      render();
+      msg.className = 'hint hint--err';
+      msg.textContent = 'Не удалось загрузить ответы — сохранять сейчас нельзя, список затрёт то, что уже сохранено.';
+      return;
+    }
+    if (!rows.length && firstRow) rows = [{ ...firstRow }];
     msg.className = 'hint';
     msg.textContent = '';
-    toast('Сохранено');
-  } catch {
-    msg.className = 'hint hint--err';
-    msg.textContent = 'Не получилось сохранить';
-  }
-});
+    render();
+  };
+}
 
-async function loadIgReplies() {
-  igRows = (await api('/api/ig-replies')).map(r => ({ keyword: r.keyword, reply: r.reply }));
+const loadIgReplies = replyEditor({
+  prefix: 'ig',
+  endpoint: '/api/ig-replies',
   // Nothing saved yet: offer the row the salon actually needs, unsaved — the
   // posts tell people to write "+", so that is the keyword.
-  if (!igRows.length) igRows = [{ keyword: '+', reply: '' }];
-  renderIgRows();
-}
+  firstRow: { keyword: '+', reply: '' },
+  keywordPlaceholder: '+',
+  replyPlaceholder: 'Здравствуйте! Маникюр — 1500 сом, записаться можно здесь: ...',
+});
+
+const loadWaReplies = replyEditor({
+  prefix: 'wa',
+  endpoint: '/api/wa-replies',
+  firstRow: null,
+  keywordPlaceholder: 'прайс',
+  replyPlaceholder: 'Маникюр — 1500 сом, педикюр — 2000 сом. Записаться можно прямо здесь: напишите «меню».',
+});
 
 // ── Аварийный выключатель ──────────────────────────────────────────────
 function renderBotState(enabled) {
@@ -1189,24 +1269,33 @@ function single(container, selector, onPick) {
   });
 }
 
-// ── Theme toggle ─────────────────────────────────────────────────────────
+// ── Тема и профиль ───────────────────────────────────────────────────────
+// Смена темы и выход живут в шторке профиля: в шапке на них уходило три
+// иконки из четырёх, а нажимают их раз в месяц.
+function currentTheme() {
+  return document.documentElement.dataset.theme ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+}
+function renderThemeRow() {
+  document.getElementById('themeSub').textContent = currentTheme() === 'dark' ? 'Тёмная' : 'Светлая';
+}
 (function initTheme() {
   let saved = null;
   try { saved = localStorage.getItem('admin-theme'); } catch {}
   if (saved) document.documentElement.dataset.theme = saved;
+  renderThemeRow();
 })();
 document.getElementById('themeBtn').addEventListener('click', () => {
-  const cur = document.documentElement.dataset.theme ||
-    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  const next = cur === 'dark' ? 'light' : 'dark';
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
   try { localStorage.setItem('admin-theme', next); } catch {}
+  renderThemeRow();
 });
 document.getElementById('logoutBtn').addEventListener('click', () => clerk.signOut());
 document.getElementById('refreshBtn').addEventListener('click', () => {
   loadAppointments(); loadWeekCounts();
-  if (!document.getElementById('screen-uslugi').hidden) loadServices();
-  if (!document.getElementById('screen-chasy').hidden) loadHoursScreen();
+  if (!document.getElementById('screen-salon').hidden) loadServices();
+  if (!document.getElementById('screen-master').hidden) renderHoursView();
 });
 
 // ── Day strip ──────────────────────────────────────────────────────────
@@ -1619,7 +1708,8 @@ document.getElementById('cancelSubmitBtn').addEventListener('click', async () =>
 // ── Услуги ────────────────────────────────────────────────────────────
 async function loadServices() {
   state.services = await api('/api/services');
-  document.getElementById('uslugiSub').textContent = `${state.services.length} услуг`;
+  document.getElementById('uslugiSub').textContent =
+    `${state.services.length} ${plural(state.services.length, 'услуга', 'услуги', 'услуг')}`;
   document.getElementById('servicesCard').innerHTML = state.services.map(s => `
     <button class="row" data-edit-service="${s.id}">
       <span class="row__main">
@@ -1766,39 +1856,86 @@ async function loadMasters() {
       <svg class="row__chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
     </button>`).join('') || '<div class="row"><span class="row__main">Мастеров пока нет</span></div>';
   document.getElementById('mastersCard').querySelectorAll('[data-edit-master]').forEach(b =>
-    b.addEventListener('click', () => openMasterSheet(Number(b.dataset.editMaster))));
+    b.addEventListener('click', () => openMasterScreen(Number(b.dataset.editMaster))));
 }
-function openMasterSheet(id) {
-  const m = id ? state.masters.find(x => x.id === id) : null;
-  state.master = { id: m ? m.id : null };
-  document.getElementById('mstTitle').textContent = m ? 'Мастер' : 'Новый мастер';
-  document.getElementById('mstName').value = m ? m.name : '';
-  document.getElementById('mstDesc').value = m && m.description ? m.description : '';
-  document.getElementById('mstActive').setAttribute('aria-checked', String(m ? !!m.is_active : true));
+
+// Карточка мастера — уровень ниже списка: тут и его данные, и его график,
+// поэтому выбирать мастера внутри часов больше не нужно.
+function openMasterScreen(id) {
+  const m = state.masters.find(x => x.id === id);
+  if (!m) return;
+  state.master = { id: m.id };
+  state.hoursMasterId = m.id;
+  state.hoursDate = null;
+  document.getElementById('mstTitle').textContent = m.name;
+  document.getElementById('mstSub').textContent = m.is_active
+    ? 'Принимает записи' : 'Отключён — новые записи к нему не попадают';
+  document.getElementById('mstName').value = m.name;
+  document.getElementById('mstDesc').value = m.description || '';
+  document.getElementById('mstActive').setAttribute('aria-checked', String(!!m.is_active));
   document.getElementById('mstHint').textContent = '';
-  document.getElementById('mstDeleteBtn').hidden = !m;
-  openSheet('sheet-masteredit');
+  goto('master');
+  renderHoursView();
 }
-document.getElementById('addMasterBtn').addEventListener('click', () => openMasterSheet(null));
+document.getElementById('masterBackBtn').addEventListener('click', () => goto('mastera'));
+
+document.getElementById('addMasterBtn').addEventListener('click', () => {
+  document.getElementById('mstNewName').value = '';
+  document.getElementById('mstNewDesc').value = '';
+  document.getElementById('mstNewHint').className = 'hint';
+  document.getElementById('mstNewHint').textContent = 'Часы работы зададите сразу после — на карточке мастера.';
+  openSheet('sheet-masternew');
+});
 document.getElementById('mstActive').addEventListener('click', function () {
   this.setAttribute('aria-checked', String(this.getAttribute('aria-checked') !== 'true'));
 });
-document.getElementById('mstSubmitBtn').addEventListener('click', async () => {
+
+// Новый мастер заводится одним именем, а дальше открывается его карточка —
+// график всё равно правится только там.
+document.getElementById('mstNewSubmitBtn').addEventListener('click', async function () {
+  const name = document.getElementById('mstNewName').value.trim();
+  const description = document.getElementById('mstNewDesc').value.trim();
+  const hint = document.getElementById('mstNewHint');
+  if (!name) { hint.className = 'hint hint--err'; hint.textContent = 'Введите имя'; return; }
+  this.disabled = true;
+  try {
+    const created = await api('/api/masters', { method: 'POST', body: JSON.stringify({ name, description }) });
+    closeSheet(); toast('Мастер добавлен');
+    await loadMasters();
+    renderMasterFilterList();
+    openMasterScreen(created.id);
+  } catch {
+    hint.className = 'hint hint--err';
+    hint.textContent = 'Не получилось сохранить';
+  } finally {
+    this.disabled = false;
+  }
+});
+
+document.getElementById('mstSubmitBtn').addEventListener('click', async function () {
   const name = document.getElementById('mstName').value.trim();
   const description = document.getElementById('mstDesc').value.trim();
   const is_active = document.getElementById('mstActive').getAttribute('aria-checked') === 'true';
   const hint = document.getElementById('mstHint');
-  if (!name) { hint.textContent = 'Введите имя'; return; }
+  hint.className = 'hint';
+  if (!name) { hint.className = 'hint hint--err'; hint.textContent = 'Введите имя'; return; }
+  this.disabled = true;
   try {
-    if (state.master.id) {
-      await api(`/api/masters/${state.master.id}`, { method: 'PUT', body: JSON.stringify({ name, description, is_active }) });
-    } else {
-      await api('/api/masters', { method: 'POST', body: JSON.stringify({ name, description }) });
-    }
-    closeSheet(); toast('Сохранено');
+    await api(`/api/masters/${state.master.id}`, { method: 'PUT', body: JSON.stringify({ name, description, is_active }) });
+    toast('Сохранено');
     await loadMasters();
     renderMasterFilterList();
-  } catch { hint.textContent = 'Не получилось сохранить'; }
+    // Имя стоит в заголовке экрана, а «принимает записи» — под ним.
+    document.getElementById('mstTitle').textContent = name;
+    document.getElementById('mstSub').textContent = is_active
+      ? 'Принимает записи' : 'Отключён — новые записи к нему не попадают';
+    hint.textContent = '';
+  } catch {
+    hint.className = 'hint hint--err';
+    hint.textContent = 'Не получилось сохранить';
+  } finally {
+    this.disabled = false;
+  }
 });
 
 // То же правило, что и у услуг: мастера без единой записи можно удалить
@@ -1819,6 +1956,7 @@ async function deleteMaster(m) {
     closeSheet(); toast('Мастер удалён');
     await loadMasters();
     renderMasterFilterList();
+    goto('mastera');   // карточки удалённого мастера больше нет
   } catch (err) {
     if (err.error !== 'in_use') { closeSheet(); toast('Не получилось удалить'); return; }
     if (!m.is_active) {
@@ -1838,6 +1976,7 @@ async function deleteMaster(m) {
           closeSheet(); toast('Мастер отключён');
           await loadMasters();
           renderMasterFilterList();
+          openMasterScreen(m.id);
         } catch { closeSheet(); toast('Не получилось отключить'); }
       },
     });
@@ -1866,23 +2005,7 @@ function shiftMonth(ym, n) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-async function loadHoursScreen() {
-  const masters = activeMasters();
-  if (!masters.some(m => m.id === state.hoursMasterId)) {
-    state.hoursMasterId = masters.length ? masters[0].id : null;
-  }
-  document.getElementById('hoursMasterChips').innerHTML = masters.map(m =>
-    `<button class="chip${m.id === state.hoursMasterId ? ' chip--on' : ''}" data-master-id="${m.id}">${escapeHtml(m.name)}</button>`).join('');
-  await renderHoursView();
-}
-document.getElementById('hoursMasterChips').addEventListener('click', async e => {
-  const b = e.target.closest('.chip');
-  if (!b) return;
-  state.hoursMasterId = Number(b.dataset.masterId);
-  document.querySelectorAll('#hoursMasterChips .chip').forEach(c => c.classList.remove('chip--on'));
-  b.classList.add('chip--on');
-  await renderHoursView();
-});
+// Мастер уже выбран — это тот, чью карточку открыли (openMasterScreen).
 document.getElementById('hoursViewSeg').addEventListener('click', async e => {
   const b = e.target.closest('.seg__btn');
   if (!b) return;
@@ -2303,7 +2426,7 @@ document.getElementById('daySubmitBtn').addEventListener('click', async () => {
   invalidateDayCache();
   closeSheet();
   toast('Сохранено');
-  if (document.getElementById('screen-chasy').hidden) {
+  if (document.getElementById('screen-master').hidden) {
     await loadAppointments();
   } else {
     await renderHoursView();
@@ -2356,7 +2479,7 @@ async function initAuth() {
   // the way. Pairing WhatsApp is deliberately left to the salon too; see
   // /api/wa-status for why.
   if (!isSystemAdmin) {
-    document.querySelectorAll('[data-goto="dostupy"], #screen-dostupy, [data-goto="bot"], #screen-bot')
+    document.querySelectorAll('[data-goto="sysadmin"], #screen-sysadmin')
       .forEach(el => el.remove());
   }
 
@@ -2380,6 +2503,9 @@ async function initAuth() {
 
   const salonName = salons.find(s => s.slug === currentSalon).name;
   document.querySelectorAll('.brand__name').forEach(el => { el.textContent = salonName; });
+  document.getElementById('prfSalon').textContent = salonName;
+  document.getElementById('prfEmail').textContent =
+    clerk.user.primaryEmailAddress?.emailAddress || '';
   return true;
 }
 
@@ -2411,13 +2537,17 @@ async function initAuth() {
   }
 
   // Instagram runs for one salon; for the rest the tab would edit texts that
-  // nothing ever reads.
+  // nothing ever reads. A salon that cannot answer the question — an older
+  // container without the route, a service that is down — is treated as not
+  // having it: a missing tab is a smaller lie than an editor that saves into
+  // the void.
+  let igEnabled = false;
   try {
-    const ig = await api('/api/ig-status');
-    if (!ig.enabled) {
-      document.querySelectorAll('[data-goto="instagram"], #screen-instagram').forEach(el => el.remove());
-    }
+    igEnabled = (await api('/api/ig-status')).enabled === true;
   } catch {}
+  if (!igEnabled) {
+    document.querySelectorAll('[data-goto="instagram"], #screen-instagram').forEach(el => el.remove());
+  }
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/admin/sw.js').catch(() => {});
