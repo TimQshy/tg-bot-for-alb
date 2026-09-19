@@ -210,3 +210,16 @@ test('мастер без записей удаляется вместе с гр
   assert.ok(res.body.appointments > 0);
   assert.ok(await db.getMaster(masterId), 'мастер должен остаться');
 });
+
+test('выключатель бота: PUT переключает, GET отдаёт состояние', async () => {
+  const off = await call('PUT', '/api/bot-state', { enabled: false });
+  assert.equal(off.status, 200);
+  assert.equal(off.body.enabled, false);
+  assert.equal((await call('GET', '/api/bot-state')).body.enabled, false);
+
+  const bad = await call('PUT', '/api/bot-state', { enabled: 'нет' });
+  assert.equal(bad.status, 400);
+
+  // Back on, or every later run of the suite starts with a silent bot.
+  assert.equal((await call('PUT', '/api/bot-state', { enabled: true })).body.enabled, true);
+});

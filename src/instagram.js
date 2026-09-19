@@ -10,6 +10,7 @@
 import crypto from 'crypto';
 import express from 'express';
 import { db } from './database.js';
+import { botEnabled } from './botState.js';
 
 const GRAPH = 'https://graph.instagram.com/v21.0';
 
@@ -57,6 +58,9 @@ async function matchReply(text) {
 }
 
 async function handleComment(value) {
+  // The panel's emergency switch covers Instagram too — checked before the
+  // event is claimed, so nothing is silently marked as handled.
+  if (!(await botEnabled())) return;
   const commentId = value.id;
   const text = value.text || '';
   const author = value.from?.username || '';
@@ -82,6 +86,7 @@ async function handleComment(value) {
 }
 
 async function handleMessage(event) {
+  if (!(await botEnabled())) return;
   const message = event.message;
   const senderId = event.sender?.id;
   if (!message || message.is_echo || !senderId) return;

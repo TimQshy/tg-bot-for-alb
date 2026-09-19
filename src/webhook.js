@@ -12,6 +12,7 @@ import { adminRouter } from './admin.js';
 import { instagramRouter, instagramEnabled } from './instagram.js';
 import { askAI } from './ai.js';
 import { runAgent, agentEnabled, clearHistory, takeFollowUps } from './aiAgent.js';
+import { botEnabled } from './botState.js';
 
 const GREETING_WORDS = ['старт', 'start', 'меню', 'menu', 'привет', 'hi', 'hello'];
 // How long the bot keeps quiet in a chat after a human answered there.
@@ -66,6 +67,14 @@ app.use('/s/:slug/admin', adminRouter);
 export async function handleIncoming(phone, { text, profileName }) {
   await db.upsertUser({ id: phone, name: profileName || null });
   db.logMessage({ phone, direction: 'in', text }).catch(() => {});
+
+  // Switched off from the panel. The message is already logged above, so the
+  // salon still sees what came in while the bot was quiet — it just doesn't
+  // answer anything, admin commands included.
+  if (!(await botEnabled())) {
+    console.log(`[killswitch] bot is off, no reply to ${phone}`);
+    return;
+  }
 
   const trimmed = (text || '').trim();
 

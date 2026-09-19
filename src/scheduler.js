@@ -8,6 +8,7 @@ import { sendText } from './whatsapp.js';
 import { formatDateFull } from './utils.js';
 import { expireStaleOffers } from './waitlist.js';
 import { refreshIgToken } from './instagram.js';
+import { botEnabled } from './botState.js';
 
 const WAITLIST_OFFER_TIMEOUT_MIN = parseInt(process.env.WAITLIST_OFFER_TIMEOUT_MIN || '30', 10);
 
@@ -44,7 +45,12 @@ async function runReminders() {
 export function startScheduler() {
   // Every 5 min: cheap at current volume, fine-grained enough that
   // reminders/waitlist timeouts don't run noticeably late.
-  cron.schedule('*/5 * * * *', () => {
+  // Both jobs write to clients, so both stop while the bot is switched off
+  // in the panel. Nothing is marked as sent in the meantime — a reminder
+  // whose hour passed during the outage is simply skipped by the window
+  // check when the tick runs again.
+  cron.schedule('*/5 * * * *', async () => {
+    if (!(await botEnabled().catch(() => true))) return;
     runReminders().catch(err => console.error('runReminders failed:', err));
     expireStaleOffers(WAITLIST_OFFER_TIMEOUT_MIN).catch(err => console.error('expireStaleOffers failed:', err));
   });

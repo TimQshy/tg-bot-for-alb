@@ -267,6 +267,7 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
   border:1px solid var(--warn-soft)}
 .appt--conflict{border-color:var(--warn);box-shadow:none}
 .status--conflict{background:var(--warn-soft);color:var(--warn)}
+.input--area{min-height:92px;padding:10px 12px;line-height:1.45;resize:vertical}
 .hint{font-size:12.5px;color:var(--ink-3);margin:2px 0 0}
 .hint--err{color:#C0392B}
 :root[data-theme="dark"] .hint--err{color:#F08A7E}
@@ -316,6 +317,10 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Салон</button>
     <button class="snav" data-goto="whatsapp" aria-selected="false">
       <svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-5.9A8.5 8.5 0 1 1 21 11.5z"/></svg>WhatsApp</button>
+    <button class="snav" data-goto="instagram" aria-selected="false">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>Instagram</button>
+    <button class="snav" data-goto="bot" aria-selected="false">
+      <svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="4"/><path d="M12 4v4M9 14h.01M15 14h.01"/></svg>Бот</button>
     <button class="snav" data-goto="dostupy" aria-selected="false">
       <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Доступы</button>
   </nav>
@@ -428,6 +433,31 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <div class="card wa-card" id="waCard"></div>
     </main>
 
+    <!-- ================= INSTAGRAM ================= -->
+    <main class="col screen" id="screen-instagram" hidden>
+      <div class="screen-head"><h1>Instagram</h1><p>Что бот отправляет в ответ на комментарий под постом и на сообщение в директ</p></div>
+      <div id="igList"></div>
+      <button class="btn btn--ghost btn--block" id="igAddBtn" style="margin-top:12px">+ Добавить ответ</button>
+      <button class="btn btn--primary btn--block" id="igSaveBtn" style="margin-top:10px">Сохранить</button>
+      <p class="hint" id="igMsg"></p>
+      <p class="hint">Бот идёт по списку сверху вниз и отвечает первым подошедшим текстом. Слово ищется внутри сообщения, регистр не важен: «+» сработает и на «+», и на «+ сколько стоит». Звёздочка <b>*</b> подходит к чему угодно — держите её последней. Если не подошло ничего, бот молчит.</p>
+    </main>
+
+    <!-- ================= БОТ ================= -->
+    <main class="col screen" id="screen-bot" hidden>
+      <div class="screen-head"><h1>Бот</h1><p>Аварийный выключатель этого салона</p></div>
+      <div class="card" style="padding:0">
+        <div class="row">
+          <span class="row__main">
+            <span class="row__title">Бот отвечает клиентам</span>
+            <span class="row__sub" id="botStateSub">Загружаем…</span>
+          </span>
+          <button class="switch" role="switch" id="botSwitch" aria-checked="true"></button>
+        </div>
+      </div>
+      <p class="hint">Выключенный бот молчит везде: не отвечает в WhatsApp, не шлёт напоминания о визитах и не отвечает на комментарии в Instagram. Входящие сообщения всё равно сохраняются, записи и эта панель работают как обычно.</p>
+    </main>
+
     <!-- ================= ДОСТУПЫ ================= -->
     <main class="col screen" id="screen-dostupy" hidden>
       <div class="screen-head"><h1>Доступы</h1><p>Можно пригласить заранее, а можно выдать доступ тому, кто зарегистрировался сам</p></div>
@@ -464,6 +494,10 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
     <svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Салон</button>
   <button class="tab" role="tab" aria-selected="false" data-goto="whatsapp">
     <svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-5.9A8.5 8.5 0 1 1 21 11.5z"/></svg>WhatsApp</button>
+  <button class="tab" role="tab" aria-selected="false" data-goto="instagram">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>Insta</button>
+  <button class="tab" role="tab" aria-selected="false" data-goto="bot">
+    <svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="4"/><path d="M12 4v4M9 14h.01M15 14h.01"/></svg>Бот</button>
   <button class="tab" role="tab" aria-selected="false" data-goto="dostupy">
     <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Доступы</button>
 </nav>
@@ -779,6 +813,8 @@ function goto(name) {
   if (name === 'chasy') loadHoursScreen();
   if (name === 'dostupy') loadAccess();
   if (name === 'salon') loadSettings();
+  if (name === 'instagram') loadIgReplies();
+  if (name === 'bot') loadBotState();
   name === 'whatsapp' ? startWaPolling() : stopWaPolling();
 }
 document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => goto(b.dataset.goto)));
@@ -844,7 +880,9 @@ async function loadWaStatus() {
   }
   card.innerHTML = '<h2>Отсканируйте в WhatsApp</h2>' +
     '<p>На телефоне салона: Настройки → Связанные устройства → Привязать устройство</p>' +
-    `<img src="${wa.qrDataUrl}" alt="QR-код для привязки WhatsApp">`;
+    `<img src="${wa.qrDataUrl}" alt="QR-код для привязки WhatsApp">` +
+    '<p class="hint" style="margin-top:12px">Сканируйте с того телефона, от чьего имени бот должен писать клиентам. ' +
+    'Если бот сейчас работает, новая привязка оборвёт старую.</p>';
 }
 
 function startWaPolling() {
@@ -855,6 +893,108 @@ function startWaPolling() {
 function stopWaPolling() {
   if (waTimer) { clearInterval(waTimer); waTimer = null; }
 }
+
+// ── Instagram: тексты автоответов ──────────────────────────────────────
+// Edited and saved as one list: its order decides which keyword wins, so
+// there is nothing meaningful to save row by row.
+let igRows = [];
+
+function renderIgRows() {
+  document.getElementById('igList').innerHTML = igRows.map((r, i) => `
+    <div class="card" style="padding:16px;margin-bottom:10px">
+      <label class="field"><span class="field__label">Слово в сообщении</span>
+        <input class="input" data-ig-keyword="${i}" value="${escapeHtml(r.keyword)}" placeholder="+"></label>
+      <label class="field"><span class="field__label">Что отправить</span>
+        <textarea class="input input--area" data-ig-reply="${i}" placeholder="Здравствуйте! Маникюр — 1500 сом, записаться можно здесь: ...">${escapeHtml(r.reply)}</textarea></label>
+      <button class="btn btn--danger btn--block" data-ig-del="${i}">Удалить</button>
+    </div>`).join('');
+}
+
+document.getElementById('igList').addEventListener('input', e => {
+  const { igKeyword, igReply } = e.target.dataset;
+  if (igKeyword !== undefined) igRows[+igKeyword].keyword = e.target.value;
+  if (igReply !== undefined) igRows[+igReply].reply = e.target.value;
+});
+document.getElementById('igList').addEventListener('click', e => {
+  const del = e.target.closest('[data-ig-del]');
+  if (!del) return;
+  igRows.splice(+del.dataset.igDel, 1);
+  renderIgRows();
+});
+document.getElementById('igAddBtn').addEventListener('click', () => {
+  igRows.push({ keyword: '', reply: '' });
+  renderIgRows();
+});
+document.getElementById('igSaveBtn').addEventListener('click', async () => {
+  const msg = document.getElementById('igMsg');
+  const cleaned = igRows.map(r => ({ keyword: r.keyword.trim(), reply: r.reply.trim() }));
+  // The API drops half-filled rows silently; saying so beforehand beats the
+  // row quietly vanishing on save.
+  if (cleaned.some(r => Boolean(r.keyword) !== Boolean(r.reply))) {
+    msg.className = 'hint hint--err';
+    msg.textContent = 'В строке нужны и слово, и текст ответа — иначе она не сохранится.';
+    return;
+  }
+  try {
+    igRows = (await api('/api/ig-replies', { method: 'PUT', body: JSON.stringify({ replies: cleaned }) }))
+      .map(r => ({ keyword: r.keyword, reply: r.reply }));
+    renderIgRows();
+    msg.className = 'hint';
+    msg.textContent = '';
+    toast('Сохранено');
+  } catch {
+    msg.className = 'hint hint--err';
+    msg.textContent = 'Не получилось сохранить';
+  }
+});
+
+async function loadIgReplies() {
+  igRows = (await api('/api/ig-replies')).map(r => ({ keyword: r.keyword, reply: r.reply }));
+  // Nothing saved yet: offer the row the salon actually needs, unsaved — the
+  // posts tell people to write "+", so that is the keyword.
+  if (!igRows.length) igRows = [{ keyword: '+', reply: '' }];
+  renderIgRows();
+}
+
+// ── Аварийный выключатель ──────────────────────────────────────────────
+function renderBotState(enabled) {
+  document.getElementById('botSwitch').setAttribute('aria-checked', String(enabled));
+  document.getElementById('botStateSub').textContent = enabled
+    ? 'Работает как обычно'
+    : 'Выключен — клиентам никто не отвечает';
+}
+
+async function loadBotState() {
+  try {
+    renderBotState((await api('/api/bot-state')).enabled);
+  } catch {
+    document.getElementById('botStateSub').textContent = 'Не удалось узнать состояние';
+  }
+}
+
+async function setBotState(enabled) {
+  renderBotState(enabled);
+  try {
+    renderBotState((await api('/api/bot-state', { method: 'PUT', body: JSON.stringify({ enabled }) })).enabled);
+    toast(enabled ? 'Бот включён' : 'Бот выключен');
+  } catch {
+    renderBotState(!enabled);
+    toast('Не получилось переключить');
+  }
+}
+
+// Switching on is harmless; switching off leaves clients talking to nobody,
+// so that direction asks first.
+document.getElementById('botSwitch').addEventListener('click', () => {
+  const enabled = document.getElementById('botSwitch').getAttribute('aria-checked') !== 'true';
+  if (enabled) return setBotState(true);
+  openConfirm({
+    title: 'Выключить бота?',
+    text: 'Клиенты перестанут получать ответы и напоминания — и в WhatsApp, и в Instagram — пока бота не включат обратно.',
+    action: 'Выключить',
+    onConfirm: async () => { closeSheet(); await setBotState(false); },
+  });
+});
 
 // ── Доступы (Clerk) ────────────────────────────────────────────────────
 function salonName(slug) {
@@ -2211,11 +2351,12 @@ async function initAuth() {
   isSystemAdmin = meta.role === 'system_admin';
   salons = isSystemAdmin ? config.salons : config.salons.filter(s => owned.includes(s.slug));
 
-  // Pairing the WhatsApp number and handing out access are ours to do, not
-  // the salon's — the API enforces both, hiding the tabs just keeps them out
-  // of the way.
+  // Handing out access and switching the bot off are ours to do, not the
+  // salon's — the API enforces both, hiding the tabs just keeps them out of
+  // the way. Pairing WhatsApp is deliberately left to the salon too; see
+  // /api/wa-status for why.
   if (!isSystemAdmin) {
-    document.querySelectorAll('[data-goto="whatsapp"], #screen-whatsapp, [data-goto="dostupy"], #screen-dostupy')
+    document.querySelectorAll('[data-goto="dostupy"], #screen-dostupy, [data-goto="bot"], #screen-bot')
       .forEach(el => el.remove());
   }
 
@@ -2268,6 +2409,15 @@ async function initAuth() {
     }
     return;
   }
+
+  // Instagram runs for one salon; for the rest the tab would edit texts that
+  // nothing ever reads.
+  try {
+    const ig = await api('/api/ig-status');
+    if (!ig.enabled) {
+      document.querySelectorAll('[data-goto="instagram"], #screen-instagram').forEach(el => el.remove());
+    }
+  } catch {}
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/admin/sw.js').catch(() => {});

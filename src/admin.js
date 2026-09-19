@@ -12,6 +12,8 @@ import {
 } from './schedule.js';
 import * as waitlist from './waitlist.js';
 import { authorizeAdmin, clerk } from './adminAuth.js';
+import { botEnabled, setBotEnabled } from './botState.js';
+import { instagramEnabled } from './instagram.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -34,19 +36,36 @@ adminRouter.get('/', (_req, res) => {
 
 adminRouter.use('/api', requireAuth);
 
-// ── WhatsApp linked-device pairing (Baileys) ────────────────────────────
-// System admins only. Linking the number is an onboarding step we run for
-// the salon, and the QR is dangerous in the wrong hands twice over: whoever
-// scans it links *their* WhatsApp as the salon's bot, and a salon owner
-// re-linking their own device silently kills the existing session.
 function requireSystemAdmin(req, res, next) {
   if (!req.admin.isSystemAdmin) return res.status(403).json({ error: 'forbidden' });
   next();
 }
 
-adminRouter.get('/api/wa-status', requireSystemAdmin, (_req, res) => {
+// ── WhatsApp linked-device pairing (Baileys) ────────────────────────────
+// Open to the salon as well: when the phone logs the device out — a new
+// phone, a wipe, someone tidying up "Linked devices" — the salon is the only
+// one holding the handset, and waiting for us to re-pair it means a dead bot
+// in the meantime. The QR still links whoever scans it as the salon's bot,
+// and scanning a fresh one drops the session that is running, so the screen
+// says so in as many words.
+adminRouter.get('/api/wa-status', (_req, res) => {
   const { status, qrDataUrl } = getWaStatus();
   res.json({ salon: process.env.SALON_SLUG, status, qrDataUrl });
+});
+
+// ── Emergency switch ─────────────────────────────────────────────────────
+// Per salon, and only ours to flip: the salon turning its own bot off for
+// the night is how clients end up with silence and no explanation. Anyone
+// with access can *see* the state, so a quiet bot is never a mystery.
+adminRouter.get('/api/bot-state', async (_req, res) => {
+  res.json({ enabled: await botEnabled() });
+});
+
+adminRouter.put('/api/bot-state', requireSystemAdmin, async (req, res) => {
+  if (typeof req.body?.enabled !== 'boolean') return res.status(400).json({ error: 'missing_fields' });
+  const enabled = await setBotEnabled(req.body.enabled);
+  console.log(`[killswitch] bot ${enabled ? 'enabled' : 'disabled'} by ${req.admin.userId}`);
+  res.json({ enabled });
 });
 
 // ── Access control (Clerk) ───────────────────────────────────────────────
@@ -279,6 +298,13 @@ adminRouter.put('/api/settings', async (req, res) => {
 });
 
 // ── Instagram auto-replies ────────────────────────────────────────────────
+// Only one salon has Instagram wired up; the others run the same image with
+// IG_VERIFY_TOKEN unset and no webhook route at all. The panel asks first so
+// it can say that instead of offering an editor whose texts nothing reads.
+adminRouter.get('/api/ig-status', (_req, res) => {
+  res.json({ enabled: instagramEnabled });
+});
+
 // The whole list is saved at once: order decides which keyword wins, so
 // editing rows one by one would need a separate reorder call anyway.
 adminRouter.get('/api/ig-replies', async (_req, res) => {
