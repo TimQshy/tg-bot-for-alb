@@ -5,7 +5,7 @@ import { getSession, setSession, clearSession } from './session.js';
 import { formatDateShort, formatDateFull, formatPrice } from './utils.js';
 import { getAvailableDates, getFreeSlotsForService } from './schedule.js';
 import * as waitlist from './waitlist.js';
-import { addressMessage } from './salonInfo.js';
+import { addressMessage, getBookingHorizonDays } from './salonInfo.js';
 
 const SLOTS_PAGE_SIZE = 9;
 const MENU_PAGE_SIZE = 9; // + 1 row for "ещё", matches old MAX_LIST_ROWS-1 budget
@@ -84,23 +84,54 @@ export async function chooseMaster(phone, masterIdStr) {
   const master = await db.getMaster(masterId);
   if (!master) return start(phone);
 
+  setSession(phone, { ...session, step: 'choose_date', masterId, masterName: master.name, datePage: 0 });
+  return sendDatesPage(phone);
+}
+
+// One page of dates, the same shape as sendSlotsPage. Dates are re-queried
+// per page rather than cached in the session: the horizon can run to a year,
+// and walking every date of it to show the first nine would cost a slot
+// computation per date for nothing.
+async function sendDatesPage(phone) {
+  const session = getSession(phone);
+  if (!session || session.step !== 'choose_date') return start(phone);
+
+  const page = session.datePage || 0;
+  const horizon = await getBookingHorizonDays();
+  // One past the end of this page, which is what tells us whether to offer
+  // "ещё даты" at all.
+  const wanted = MENU_PAGE_SIZE * (page + 1) + 1;
   // The service is passed in so a date the colouring can't fit on — morning
   // gone, or the day already taken by another day-long booking — never makes
   // the list.
-  const dates = await getAvailableDates(masterId, 30, {
+  const dates = await getAvailableDates(session.masterId, horizon, {
     service: session.service,
-    limit: MENU_PAGE_SIZE,
+    limit: wanted,
   });
-  if (!dates.length) {
+
+  const pageDates = dates.slice(page * MENU_PAGE_SIZE, (page + 1) * MENU_PAGE_SIZE);
+  if (!pageDates.length) {
+    // Only possible on the first page: "ещё даты" is offered only when a
+    // further date is already in hand.
     clearSession(phone);
-    return sendText(phone, `😔 У мастера «${master.name}» нет свободных дат в ближайшее время.`);
+    return sendText(phone, `😔 У мастера «${session.masterName}» нет свободных дат в ближайшее время.`);
   }
 
-  setSession(phone, { ...session, step: 'choose_date', masterId, masterName: master.name });
+  const items = pageDates.map(d => ({ id: `dt:${d}`, label: formatDateShort(d) }));
+  if (dates.length > (page + 1) * MENU_PAGE_SIZE) items.push({ id: 'more_dates', label: '▶️ Ещё даты' });
 
-  const items = dates.map(d => ({ id: `dt:${d}`, label: formatDateShort(d) }));
+  return sendMenu(
+    phone,
+    `💅 ${session.serviceName}\n👩 ${session.masterName}\n\nВыберите дату (ответьте цифрой):`,
+    items
+  );
+}
 
-  return sendMenu(phone, `💅 ${session.serviceName}\n👩 ${master.name}\n\nВыберите дату (ответьте цифрой):`, items);
+export async function nextDatesPage(phone) {
+  const session = getSession(phone);
+  if (!session || session.step !== 'choose_date') return start(phone);
+  setSession(phone, { ...session, datePage: (session.datePage || 0) + 1 });
+  return sendDatesPage(phone);
 }
 
 // ── Step 3: date chosen → show time slots ────────────────────────────────

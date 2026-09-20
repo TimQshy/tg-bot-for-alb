@@ -15,15 +15,16 @@ import {
   cancelAppointmentFor,
   rescheduleAppointmentFor,
 } from './booking.js';
-import { addressMessage, getSalonInfo } from './salonInfo.js';
+import { addressMessage, getSalonInfo, getBookingHorizonDays, HORIZON_MAX } from './salonInfo.js';
 import {
   todayStr, addDays, formatDateFull, formatPrice,
   toMinutes, toTimeString, DAYS_FULL_EXPORT, getDayOfWeek,
 } from './utils.js';
 
-// How far ahead the agent is allowed to look for dates, and how much of the
+// How far ahead the agent is allowed to look for dates comes from the salon's
+// own setting — the same one the numbered date list uses, so the two surfaces
+// never disagree about whether November is open. The rest is how much of the
 // conversation it remembers.
-const HORIZON_DAYS = 30;
 const CALENDAR_DAYS = 14;
 const HISTORY_MAX = 16; // user+assistant messages, tool traffic excluded
 const HISTORY_TTL_MS = 30 * 60 * 1000;
@@ -92,12 +93,13 @@ function calendarText() {
 }
 
 async function buildSystemPrompt(phone) {
-  const [services, masters, appts, user, salon] = await Promise.all([
+  const [services, masters, appts, user, salon, horizonDays] = await Promise.all([
     db.getActiveServices(),
     db.getActiveMasters(),
     db.getUserAppointments(phone),
     db.getUser(phone),
     getSalonInfo(),
+    getBookingHorizonDays(),
   ]);
 
   // Which master does which service — the agent needs it to pick a master_id
@@ -162,7 +164,7 @@ async function buildSystemPrompt(phone) {
 5. После успешной записи/переноса/отмены подтверди одним коротким сообщением с датой, временем, мастером и номером записи (#id). Адрес после записи бот отправляет сам отдельным сообщением — не дублируй его в подтверждении.
 6. Если клиент не знает имени, спроси его имя ДО записи и передай в create_booking параметром client_name${knownName ? ' (сейчас клиент записан как «' + knownName + '» — переспрашивать не надо)' : ''}.
 7. Вопросы не про салон (услуги, цены, мастера, запись) — вежливо скажи, что помогаешь только с этим.
-8. Работаешь с датами не дальше чем на ${HORIZON_DAYS} дней вперёд. Прошедшие даты не предлагай.
+8. Работаешь с датами не дальше чем на ${horizonDays} дней вперёд. Прошедшие даты не предлагай.
 9. У некоторых услуг есть ограничения (окно начала, занятость мастера на весь день) — они указаны в списке услуг. Если клиент просит время вне окна, объясни правило простыми словами («сложное окрашивание длится долго, поэтому начинаем только утром») и предложи подходящие варианты из check_availability.
 
 ${salon.address ? `САЛОН
@@ -214,7 +216,7 @@ const TOOLS = [
         properties: {
           service_id: { type: 'integer' },
           master_id: { type: 'integer', description: 'если клиент хочет конкретного мастера' },
-          days: { type: 'integer', description: `сколько дней вперёд смотреть, по умолчанию 14, максимум ${HORIZON_DAYS}` },
+          days: { type: 'integer', description: 'сколько дней вперёд смотреть, по умолчанию 14' },
           from_date: { type: 'string', description: 'с какой даты искать, YYYY-MM-DD; по умолчанию с сегодня' },
         },
         required: ['service_id'],
@@ -281,6 +283,13 @@ const TOOLS = [
 // ── Tool implementations ───────────────────────────────────────────────────
 const isPastDate = date => date < todayStr();
 
+// The salon's booking horizon, as a check rather than a hint: the prompt says
+// how far ahead it may work, this is what stops it when it forgets. The panel
+// is deliberately not limited this way — the salon books whatever it likes.
+async function beyondHorizon(date) {
+  return date > addDays(todayStr(), await getBookingHorizonDays());
+}
+
 async function slotsFor(masterId, date, service, { includeBusy = false, excludeApptId = null } = {}) {
   return getFreeSlotsForService(service, masterId, date, { includeBusy, excludeApptId });
 }
@@ -298,6 +307,7 @@ async function toolCheckAvailability({ date, service_id, master_id }) {
   if (!service) return { error: 'Услуга не найдена' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { error: 'Дата должна быть в формате YYYY-MM-DD' };
   if (isPastDate(date)) return { error: 'Эта дата уже прошла' };
+  if (await beyondHorizon(date)) return { error: 'На эту дату запись ещё не открыта — она слишком далеко' };
 
   const masters = await mastersFor(service, master_id);
   if (!masters.length) return { error: 'Нет мастеров для этой услуги' };
@@ -323,14 +333,20 @@ async function toolFindDates({ service_id, master_id, days, from_date }) {
   const masters = await mastersFor(service, master_id);
   if (!masters.length) return { error: 'Нет мастеров для этой услуги' };
 
-  const span = Math.min(Math.max(parseInt(days, 10) || 14, 1), HORIZON_DAYS);
+  // The salon's horizon caps how far a search may run, but only from today:
+  // a search starting a month out still gets its own window, it just cannot
+  // walk past the horizon's end.
+  const horizonDays = await getBookingHorizonDays();
+  const span = Math.min(Math.max(parseInt(days, 10) || 14, 1), HORIZON_MAX);
   const today = todayStr();
   let start = /^\d{4}-\d{2}-\d{2}$/.test(from_date || '') ? from_date : today;
   if (start < today) start = today;
 
+  const lastDate = addDays(today, horizonDays);
   const dates = [];
   for (let i = 0; i < span && dates.length < 10; i++) {
     const date = addDays(start, i);
+    if (date > lastDate) break;
     for (const m of masters) {
       const free = await slotsFor(m.id, date, service);
       if (!free.length) continue;
@@ -370,6 +386,7 @@ async function toolCreateBooking(phone, { service_id, master_id, date, start_tim
   if (!master) return { error: 'Мастер не найден' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { error: 'Дата должна быть в формате YYYY-MM-DD' };
   if (isPastDate(date)) return { error: 'Эта дата уже прошла' };
+  if (await beyondHorizon(date)) return { error: 'На эту дату запись ещё не открыта — она слишком далеко' };
 
   const slot = await resolveSlot(master_id, date, service, start_time);
   if (slot.error) return slot;
@@ -424,6 +441,7 @@ async function toolRescheduleBooking(phone, { appointment_id, date, start_time }
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { error: 'Дата должна быть в формате YYYY-MM-DD' };
   if (isPastDate(date)) return { error: 'Эта дата уже прошла' };
+  if (await beyondHorizon(date)) return { error: 'На эту дату запись ещё не открыта — она слишком далеко' };
 
   const service = await db.getService(appt.service_id);
   // The appointment's own slot must not count as busy when it moves inside

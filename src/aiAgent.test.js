@@ -71,6 +71,8 @@ mock.module('./salonInfo.js', {
   namedExports: {
     getSalonInfo: async () => ({ address: 'ул. Киевская 95', address_note: 'вход со двора', map_url: '' }),
     addressMessage: async () => '📍 Адрес: ул. Киевская 95\nвход со двора',
+    getBookingHorizonDays: async () => 60,
+    HORIZON_MAX: 365,
   },
 });
 

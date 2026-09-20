@@ -95,3 +95,15 @@ export function splitText(text, limit) {
   if (rest) chunks.push(rest);
   return chunks.filter(Boolean);
 }
+
+// A client the salon wrote into the panel without a phone number — a walk-in,
+// or someone who booked through a friend. They still need a users row, so
+// they get a handle instead of a number. Nothing can be delivered to it: the
+// prefix is what every outbound path checks before it tries.
+export const WALKIN_PREFIX = 'walkin:';
+
+export const isWalkIn = userId => String(userId || '').startsWith(WALKIN_PREFIX);
+
+export function newWalkInId() {
+  return `${WALKIN_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}

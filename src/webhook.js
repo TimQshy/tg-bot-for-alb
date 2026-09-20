@@ -116,6 +116,7 @@ export async function handleIncoming(phone, { text, profileName }) {
   if (replyId?.startsWith('svc:')) return booking.chooseService(phone, replyId.slice(4));
   if (replyId?.startsWith('mst:')) return booking.chooseMaster(phone, replyId.slice(4));
   if (replyId?.startsWith('dt:')) return booking.chooseDate(phone, replyId.slice(3));
+  if (replyId === 'more_dates') return booking.nextDatesPage(phone);
   if (replyId === 'more_slots') return booking.nextSlotsPage(phone);
   if (replyId?.startsWith('slot:')) return booking.chooseSlot(phone, replyId.slice(5));
   if (replyId === 'confirm') return booking.confirm(phone);

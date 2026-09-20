@@ -3,9 +3,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { db } from './database.js';
 import { sendAddress } from './booking.js';
-import { SETTING_KEYS } from './salonInfo.js';
+import {
+  SETTING_KEYS, HORIZON_KEY, HORIZON_MIN, HORIZON_MAX, getBookingHorizonDays,
+} from './salonInfo.js';
 import { sendText, getWaStatus } from './whatsapp.js';
-import { formatDateFull, getDayOfWeek, splitText } from './utils.js';
+import { formatDateFull, getDayOfWeek, splitText, newWalkInId } from './utils.js';
 import {
   DEFAULT_STEP_MIN, findConflicts, getDaySchedule, getFreeSlots, previewSlots, serviceSlotOpts,
   validateIntervals,
@@ -285,7 +287,10 @@ adminRouter.delete('/api/services/:id', async (req, res) => {
 // this into a dumping ground.
 adminRouter.get('/api/settings', async (_req, res) => {
   const values = await db.getSettings();
-  res.json(Object.fromEntries(SETTING_KEYS.map(k => [k, values[k] || ''])));
+  res.json({
+    ...Object.fromEntries(SETTING_KEYS.map(k => [k, values[k] || ''])),
+    [HORIZON_KEY]: await getBookingHorizonDays(),
+  });
 });
 
 adminRouter.put('/api/settings', async (req, res) => {
@@ -296,7 +301,24 @@ adminRouter.put('/api/settings', async (req, res) => {
     if (typeof body[key] !== 'string') return res.status(400).json({ error: 'bad_value' });
     values[key] = body[key].slice(0, 500);
   }
-  res.json(await db.setSettings(values));
+
+  // The horizon is a number with a range, not free text, so it is validated
+  // here rather than silently clamped on read: a salon that types 900 should
+  // be told, not quietly given 365.
+  if (HORIZON_KEY in body) {
+    const days = parseInt(body[HORIZON_KEY], 10);
+    if (!Number.isFinite(days) || days < HORIZON_MIN || days > HORIZON_MAX) {
+      return res.status(400).json({ error: 'bad_horizon' });
+    }
+    values[HORIZON_KEY] = String(days);
+  }
+
+  await db.setSettings(values);
+  const saved = await db.getSettings();
+  res.json({
+    ...Object.fromEntries(SETTING_KEYS.map(k => [k, saved[k] || ''])),
+    [HORIZON_KEY]: await getBookingHorizonDays(),
+  });
 });
 
 // ── Instagram auto-replies ────────────────────────────────────────────────
@@ -571,12 +593,20 @@ adminRouter.get('/api/available-slots', async (req, res) => {
 });
 
 // ── Create appointment (admin-created, e.g. phone booking / walk-in) ────
+// A phone number is optional: someone standing at the counter may not want to
+// leave one, and the salon still needs the slot held. Without it the client
+// gets a `walkin:` id instead of a number — a users row that exists, is
+// linked to the appointment, and that nothing ever tries to message.
 adminRouter.post('/api/appointments', async (req, res) => {
   const { phone, name, serviceId, masterId, date, startTime, endTime } = req.body || {};
   const cleanPhone = String(phone || '').replace(/\D/g, '');
-  if (!cleanPhone || !serviceId || !masterId || !date || !startTime || !endTime) {
+  const cleanName = String(name || '').trim().slice(0, 120);
+  if (!serviceId || !masterId || !date || !startTime || !endTime) {
     return res.status(400).json({ error: 'missing_fields' });
   }
+  // With no phone the name is the only thing left to tell one client from
+  // another in the day's list, so it stops being optional.
+  if (!cleanPhone && !cleanName) return res.status(400).json({ error: 'name_required' });
 
   const masters = await db.getMastersForService(serviceId);
   if (!masters.some(m => m.id === Number(masterId))) {
@@ -586,15 +616,17 @@ adminRouter.post('/api/appointments', async (req, res) => {
   const available = await db.isSlotAvailable(masterId, date, startTime, endTime);
   if (!available) return res.status(409).json({ error: 'slot_taken' });
 
-  await db.upsertUser({ id: cleanPhone, name: name || cleanPhone });
-  const created = await db.createAppointment({ userId: cleanPhone, masterId, serviceId, date, startTime, endTime });
+  const userId = cleanPhone || newWalkInId();
+  await db.upsertUser({ id: userId, name: cleanName || cleanPhone });
+  const created = await db.createAppointment({ userId, masterId, serviceId, date, startTime, endTime });
   const appt = await db.getAppointmentById(created.id);
 
+  // sendText drops walk-in ids on its own, so this needs no branch of its own.
   sendText(
-    cleanPhone,
+    userId,
     `✅ Вас записали\n\n💅 ${appt.service_name}\n👩 ${appt.master_name}\n` +
       `📅 ${formatDateFull(date)}\n🕐 ${startTime} – ${endTime}`
-  ).then(() => sendAddress(cleanPhone)).catch(() => {});
+  ).then(() => sendAddress(userId)).catch(() => {});
 
   res.json(appt);
 });

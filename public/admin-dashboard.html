@@ -432,6 +432,16 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <div class="card" id="servicesCard"></div>
       <button class="btn btn--primary btn--block" id="addServiceBtn" style="margin-top:14px">+ Добавить услугу</button>
 
+      <h2 class="subhead">Запись</h2>
+      <p class="hint" style="margin:-4px 0 10px">На сколько дней вперёд клиент может записаться сам</p>
+      <div class="card" style="padding:16px">
+        <label class="field"><span class="field__label">Открыто дней вперёд</span>
+          <input class="input" type="number" id="setHorizon" min="1" max="365" inputmode="numeric"></label>
+        <p class="hint">Бот показывает даты в пределах этого окна и листает их кнопкой «Ещё даты». Консультант дальше этого окна тоже не записывает. Вас это не ограничивает — из панели запись создаётся на любую дату.</p>
+        <button class="btn btn--primary btn--block" id="setHorizonSaveBtn" style="margin-top:14px">Сохранить</button>
+        <p class="hint" id="setHorizonMsg"></p>
+      </div>
+
       <h2 class="subhead">Адрес</h2>
       <p class="hint" style="margin:-4px 0 10px">Это отправляется клиенту сразу после подтверждения записи</p>
       <div class="card" style="padding:16px">
@@ -555,6 +565,7 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <input class="input" id="newPhone" placeholder="996700000000" inputmode="tel"></label>
     <label class="field"><span class="field__label">Имя клиента</span>
       <input class="input" id="newName" placeholder="Имя"></label>
+    <p class="hint" id="newContactHint">Телефон можно не заполнять — тогда укажите имя. Клиенту без телефона бот не пишет: ни подтверждения, ни напоминаний.</p>
 
     <span class="field__label">Услуга</span>
     <div class="filters" id="newServiceChips" style="padding:0;margin:0 0 6px"></div>
@@ -898,6 +909,8 @@ function renderSettingsPreview() {
 }
 async function loadSettings() {
   const s = await api('/api/settings');
+  document.getElementById('setHorizon').value = s.booking_horizon_days ?? 60;
+  document.getElementById('setHorizonMsg').textContent = '';
   document.getElementById('setAddress').value = s.address || '';
   document.getElementById('setAddressNote').value = s.address_note || '';
   document.getElementById('setMapUrl').value = s.map_url || '';
@@ -914,6 +927,20 @@ document.getElementById('setSaveBtn').addEventListener('click', async () => {
       address_note: document.getElementById('setAddressNote').value.trim(),
       map_url: document.getElementById('setMapUrl').value.trim(),
     }) });
+    msg.textContent = '';
+    toast('Сохранено');
+  } catch { msg.textContent = 'Не получилось сохранить'; }
+});
+
+document.getElementById('setHorizonSaveBtn').addEventListener('click', async () => {
+  const msg = document.getElementById('setHorizonMsg');
+  const days = parseInt(document.getElementById('setHorizon').value, 10);
+  if (!Number.isFinite(days) || days < 1 || days > 365) {
+    msg.textContent = 'От 1 до 365 дней';
+    return;
+  }
+  try {
+    await api('/api/settings', { method: 'PUT', body: JSON.stringify({ booking_horizon_days: days }) });
     msg.textContent = '';
     toast('Сохранено');
   } catch { msg.textContent = 'Не получилось сохранить'; }
@@ -1464,10 +1491,23 @@ document.getElementById('refreshBtn').addEventListener('click', () => {
 });
 
 // ── Day strip ──────────────────────────────────────────────────────────
+// Two weeks starting two days before today — except when the day being
+// looked at falls outside that window. The salon books a year ahead from
+// the panel, and a strip nailed to this week would leave a date that far
+// out with no way to step one day either side of it.
+const STRIP_DAYS = 14;
+
+function stripStart() {
+  const from = addDaysISO(todayISO(), -2);
+  const to = addDaysISO(from, STRIP_DAYS - 1);
+  return state.date < from || state.date > to ? addDaysISO(state.date, -2) : from;
+}
+
 function renderDayStrip() {
   const wrap = document.getElementById('dayStrip');
+  const start = stripStart();
   const days = [];
-  for (let i = -2; i <= 11; i++) days.push(addDaysISO(todayISO(), i));
+  for (let i = 0; i < STRIP_DAYS; i++) days.push(addDaysISO(start, i));
   wrap.innerHTML = days.map(d => {
     const dow = dowMon0(d);
     const count = state.weekCounts[d] || 0;
@@ -1486,8 +1526,8 @@ function renderDayStrip() {
 }
 
 async function loadWeekCounts() {
-  const from = addDaysISO(todayISO(), -2);
-  const to = addDaysISO(todayISO(), 11);
+  const from = stripStart();
+  const to = addDaysISO(from, STRIP_DAYS - 1);
   const rows = await api(`/api/appointments?dateFrom=${from}&dateTo=${to}`);
   state.weekCounts = {};
   for (const a of rows) {
@@ -1551,17 +1591,20 @@ document.getElementById('chipReset').addEventListener('click', () => {
   renderFilterChips();
   renderDayStrip();
   loadAppointments();
+  loadWeekCounts();
 });
 document.getElementById('pickTodayBtn').addEventListener('click', () => {
   state.date = todayISO();
   document.getElementById('pickDate').value = state.date;
-  renderFilterChips(); renderDayStrip(); closeSheet(); loadAppointments();
+  renderFilterChips(); renderDayStrip(); closeSheet(); loadAppointments(); loadWeekCounts();
 });
 document.getElementById('pickShowBtn').addEventListener('click', () => {
   const v = document.getElementById('pickDate').value;
   if (!v) return;
   state.date = v;
-  renderFilterChips(); renderDayStrip(); closeSheet(); loadAppointments();
+  // A date outside the current strip moves the whole window, so its dots
+  // have not been counted yet.
+  renderFilterChips(); renderDayStrip(); closeSheet(); loadAppointments(); loadWeekCounts();
 });
 document.getElementById('sheet-date').addEventListener('transitionend', () => {});
 document.querySelector('[data-sheet="sheet-date"]').addEventListener('click', () => {
@@ -1696,6 +1739,10 @@ function statusPill(status) {
   return '<span class="status status--off"><i></i>отменена</span>';
 }
 
+// A client entered in the panel without a phone carries a `walkin:` id — no
+// chat to open, no number to ring, and the bot never writes to them.
+const isWalkIn = userId => String(userId || '').startsWith('walkin:');
+
 function apptCardHtml(a, isConflict = false) {
   const isConfirmed = a.status === 'confirmed';
   const durMin = toMin(a.end_time) - toMin(a.start_time);
@@ -1713,6 +1760,7 @@ function apptCardHtml(a, isConflict = false) {
           <span class="master"><span class="ava">${escapeHtml(initial)}</span>${escapeHtml(a.master_name)}</span>
           <span class="appt__dur">${durMin} мин · до ${fmtTime(a.end_time)}</span>
           ${statusPill(a.status)}
+          ${isWalkIn(a.user_id) ? '<span class="status status--off"><i></i>без телефона</span>' : ''}
           ${isConflict ? '<span class="status status--conflict"><i></i>конфликт</span>' : ''}
         </div>
         ${isConfirmed ? `
@@ -1720,8 +1768,9 @@ function apptCardHtml(a, isConflict = false) {
           <button class="btn btn--ghost" data-move="${a.id}">
             <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Перенести</button>
           <button class="btn btn--danger" data-cancel="${a.id}">Отменить</button>
+          ${isWalkIn(a.user_id) ? '' : `
           <a class="btn btn--soft btn--icon" href="tel:+${a.user_id}" aria-label="Позвонить клиенту">
-            <svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a12 12 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></a>
+            <svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a12 12 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></a>`}
         </div>` : ''}
       </article>
     </li>`;
@@ -1785,7 +1834,8 @@ document.getElementById('newSubmitBtn').addEventListener('click', async () => {
   const name = document.getElementById('newName').value.trim();
   const date = document.getElementById('newDate').value;
   const hint = document.getElementById('newHint');
-  if (!phone || !serviceId || !masterId || !slot) { hint.textContent = 'Заполните телефон, услугу, мастера и время'; return; }
+  if (!serviceId || !masterId || !slot) { hint.textContent = 'Выберите услугу, мастера и время'; return; }
+  if (!phone && !name) { hint.textContent = 'Заполните телефон или имя клиента'; return; }
   try {
     await api('/api/appointments', {
       method: 'POST',
@@ -1795,7 +1845,9 @@ document.getElementById('newSubmitBtn').addEventListener('click', async () => {
     toast('Запись создана');
     loadAppointments(); loadWeekCounts();
   } catch (e) {
-    hint.textContent = e.error === 'slot_taken' ? 'Слот уже занят, обновите список' : 'Не получилось создать запись';
+    hint.textContent = e.error === 'slot_taken' ? 'Слот уже занят, обновите список'
+      : e.error === 'name_required' ? 'Без телефона нужно имя клиента'
+      : 'Не получилось создать запись';
     if (e.error === 'slot_taken') refreshNewSlots();
   }
 });

@@ -7,6 +7,7 @@ import P from 'pino';
 import QRCode from 'qrcode';
 import { db } from './database.js';
 import { useDbAuthState } from './waAuth.js';
+import { isWalkIn } from './utils.js';
 
 const logger = P({ level: process.env.WHATSAPP_LOG_LEVEL || 'silent' });
 
@@ -45,6 +46,10 @@ export function getWaStatus() {
 }
 
 export async function sendText(to, text) {
+  // A walk-in the salon entered without a phone has no chat to write into.
+  // Dropped here rather than at every call site, so reminders, cancellations
+  // and confirmations all stay silent for them without each one remembering.
+  if (isWalkIn(to)) return;
   db.logMessage({ phone: fromJid(toJid(to)), direction: 'out', text }).catch(() => {});
   if (process.env.WA_LOG_OUTBOUND) console.log(`[OUT → ${to}]\n${text}\n---`);
   if (!sock || connectionStatus !== 'open') {
