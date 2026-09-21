@@ -140,21 +140,35 @@ export async function chooseDate(phone, dateStr) {
   if (!session || session.step !== 'choose_date') return start(phone);
 
   const slots = await getFreeSlotsForService(session.service, session.masterId, dateStr);
-  if (!slots.length) {
-    setSession(phone, { ...session, step: 'waitlist_offer', date: dateStr });
-    return sendMenu(
-      phone,
-      `😔 На эту дату нет свободных слотов у ${session.masterName}.\n\n` +
-        `Встать в лист ожидания? Если кто-то отменит запись — напишем вам первому.`,
-      [
-        { id: 'waitlist_join', label: '⏳ Встать в очередь' },
-        { id: 'main_menu', label: '⬅️ В меню' },
-      ]
-    );
-  }
+  if (!slots.length) return offerWaitlist(phone, dateStr, `😔 На эту дату нет свободных слотов у ${session.masterName}.`);
 
   setSession(phone, { ...session, step: 'choose_slot', date: dateStr, slots, slotPage: 0 });
   return sendSlotsPage(phone);
+}
+
+// Offered wherever booking has just failed but the client plainly still
+// wants that day: an empty date, or a slot someone else took while the
+// confirmation was on screen. With the queue switched off the same dead end
+// simply sends them back to the menu.
+async function offerWaitlist(phone, dateStr, lead) {
+  const session = getSession(phone);
+  if (!session) return start(phone);
+
+  if (!(await waitlist.waitlistEnabled())) {
+    clearSession(phone);
+    await sendText(phone, `${lead}\n\nВыберите другую дату.`);
+    return sendMainMenu(phone);
+  }
+
+  setSession(phone, { ...session, step: 'waitlist_offer', date: dateStr });
+  return sendMenu(
+    phone,
+    `${lead}\n\nВстать в лист ожидания? Если кто-то отменит запись — напишем вам первому.`,
+    [
+      { id: 'waitlist_join', label: '⏳ Встать в очередь' },
+      { id: 'main_menu', label: '⬅️ В меню' },
+    ]
+  );
 }
 
 async function sendSlotsPage(phone) {
@@ -220,9 +234,9 @@ export async function confirm(phone) {
     endTime: s.endTime,
   });
   if (!appt) {
-    clearSession(phone);
-    await sendText(phone, '😔 Этот слот только что заняли. Начните запись заново.');
-    return sendMainMenu(phone);
+    // The client picked a time and pressed confirm — they want this date, so
+    // the queue is offered here rather than dropping them at the main menu.
+    return offerWaitlist(phone, s.date, '😔 Этот слот только что заняли.');
   }
 
   clearSession(phone);

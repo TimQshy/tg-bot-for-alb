@@ -11,12 +11,60 @@ import { sendAddress, sendMainMenu } from './booking.js';
 
 const ADMIN_PHONES = () => (process.env.ADMIN_PHONES || '').split(',').map(s => s.trim()).filter(Boolean);
 
+// ── Feature switch ─────────────────────────────────────────────────────────
+// Some salons don't want a queue at all: a message about a freed slot three
+// days later reads as spam if nobody is going to honour it. Off means the
+// bot never offers to queue and never sends an offer — rows already in the
+// table stay untouched, so switching back on picks up where it left off.
+// Cached like the kill switch: every cancellation asks.
+const ENABLED_KEY = 'waitlist_enabled';
+const CACHE_MS = 5000;
+
+let cached = null;
+let cachedAt = 0;
+
+// Missing key means on: the queue has been running since before the switch
+// existed, and a salon that never touches this should not lose it.
+export async function waitlistEnabled() {
+  if (cached !== null && Date.now() - cachedAt < CACHE_MS) return cached;
+  const values = await db.getSettings();
+  cached = values[ENABLED_KEY] !== '0';
+  cachedAt = Date.now();
+  return cached;
+}
+
+export async function setWaitlistEnabled(enabled) {
+  await db.setSettings({ [ENABLED_KEY]: enabled ? '1' : '0' });
+  cached = Boolean(enabled);
+  cachedAt = Date.now();
+  return cached;
+}
+
+export function clearWaitlistStateCache() {
+  cached = null;
+  cachedAt = 0;
+}
+
+// Shared by both entry points — the numbered flow and the AI agent — so the
+// rules about switching off and joining twice hold wherever someone asks.
+// Returns what happened rather than a message, because the two callers word
+// it differently.
+export async function join({ userId, masterId, serviceId, date }) {
+  if (!(await waitlistEnabled())) return { ok: false, reason: 'disabled' };
+
+  const existing = await db.findActiveWaitlistFor(userId, masterId, date);
+  if (existing) return { ok: false, reason: 'already_waiting', entry: existing };
+
+  const entry = await db.addToWaitlist({ userId, masterId, serviceId, date });
+  return { ok: true, entry };
+}
+
 // ── Join (triggered from booking.js when a chosen date has no free slots) ──
 export async function handleJoin(phone) {
   const session = getSession(phone);
   if (!session || session.step !== 'waitlist_offer') return sendMainMenu(phone);
 
-  await db.addToWaitlist({
+  const result = await join({
     userId: phone,
     masterId: session.masterId,
     serviceId: session.serviceId,
@@ -24,16 +72,26 @@ export async function handleJoin(phone) {
   });
   clearSession(phone);
 
+  if (result.reason === 'disabled') {
+    await sendText(phone, 'Лист ожидания сейчас не работает. Попробуйте выбрать другую дату.');
+    return sendMainMenu(phone);
+  }
+
   await sendText(
     phone,
-    `✅ Вы в листе ожидания на ${formatDateFull(session.date)} к ${session.masterName}.\n` +
-      `Если кто-то отменит запись — напишем вам первому.`
+    result.reason === 'already_waiting'
+      ? `Вы уже в листе ожидания на ${formatDateFull(session.date)} к ${session.masterName}. ` +
+        `Освободится место — напишем.`
+      : `✅ Вы в листе ожидания на ${formatDateFull(session.date)} к ${session.masterName}.\n` +
+        `Если кто-то отменит запись — напишем вам первому.`
   );
   return sendMainMenu(phone);
 }
 
 // ── Called right after any cancellation for (masterId, date) ───────────────
 export async function notifyNext(masterId, date) {
+  if (!(await waitlistEnabled())) return;
+
   const entry = await db.getNextWaiting(masterId, date);
   if (!entry) return;
 
@@ -115,6 +173,11 @@ export async function handleOfferDecline(phone, idStr) {
 
 // ── Called by the scheduler: offers nobody answered in time ────────────────
 export async function expireStaleOffers(timeoutMin) {
+  // Switched off mid-offer: the offer is left as it is rather than expired,
+  // so turning the queue back on does not silently drop whoever was holding
+  // one. notifyNext is the thing that stays quiet.
+  if (!(await waitlistEnabled())) return;
+
   const stale = await db.getExpiredWaitlistOffers(timeoutMin);
   for (const entry of stale) {
     await db.markWaitlistStatus(entry.id, 'expired');

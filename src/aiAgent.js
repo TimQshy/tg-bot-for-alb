@@ -16,6 +16,7 @@ import {
   rescheduleAppointmentFor,
 } from './booking.js';
 import { addressMessage, getSalonInfo, getBookingHorizonDays, HORIZON_MAX } from './salonInfo.js';
+import { join as joinWaitlist, waitlistEnabled } from './waitlist.js';
 import {
   todayStr, addDays, formatDateFull, formatPrice,
   toMinutes, toTimeString, DAYS_FULL_EXPORT, getDayOfWeek,
@@ -101,6 +102,7 @@ async function buildSystemPrompt(phone) {
     getSalonInfo(),
     getBookingHorizonDays(),
   ]);
+  const waitlistOn = await waitlistEnabled();
 
   // Which master does which service — the agent needs it to pick a master_id
   // without a round trip, and to answer "кто делает маникюр?".
@@ -154,12 +156,12 @@ async function buildSystemPrompt(phone) {
 - записать клиента: create_booking
 - показать его записи: list_my_bookings
 - перенести запись: reschedule_booking
-- отменить запись: cancel_booking
+- отменить запись: cancel_booking${waitlistOn ? '\n- поставить в лист ожидания, если на нужную дату нет времени: join_waitlist' : ''}
 
 ПРАВИЛА РАБОТЫ
 1. Никогда не выдумывай услуги, мастеров, цены, даты и свободное время. Свободное время называй ТОЛЬКО из ответа check_availability или find_dates.
 2. Перед create_booking у тебя должны быть: услуга, мастер, дата, время — и явное согласие клиента на это время. Если мастер клиенту не важен, выбери любого, у кого есть это время, и назови его имя.
-3. Если названного времени нет — так и скажи, что занято, и сразу предложи 2–3 ближайших свободных варианта.
+3. Если названного времени нет — так и скажи, что занято, и сразу предложи 2–3 ближайших свободных варианта.${waitlistOn ? ' Если клиенту нужна именно эта дата и другие варианты он не хочет — предложи лист ожидания: освободится место, напишем первому. Согласился — вызови join_waitlist. Очередь ведётся по конкретному мастеру, поэтому уточни, к какому именно, если он ещё не выбран.' : ''}
 4. Перед reschedule_booking и cancel_booking убедись, о какой именно записи речь (если их несколько — уточни или покажи список через list_my_bookings).
 5. После успешной записи/переноса/отмены подтверди одним коротким сообщением с датой, временем, мастером и номером записи (#id). Адрес после записи бот отправляет сам отдельным сообщением — не дублируй его в подтверждении.
 6. Если клиент не знает имени, спроси его имя ДО записи и передай в create_booking параметром client_name${knownName ? ' (сейчас клиент записан как «' + knownName + '» — переспрашивать не надо)' : ''}.
@@ -263,6 +265,25 @@ const TOOLS = [
           start_time: { type: 'string', description: 'HH:MM' },
         },
         required: ['appointment_id', 'date', 'start_time'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'join_waitlist',
+      description:
+        'Поставить клиента в лист ожидания на дату, где нет свободного времени. ' +
+        'Вызывай, когда клиент хочет именно эту дату и согласен подождать отмены.',
+      parameters: {
+        type: 'object',
+        properties: {
+          service_id: { type: 'integer' },
+          master_id: { type: 'integer', description: 'id мастера, к которому клиент хочет попасть' },
+          date: { type: 'string', description: 'YYYY-MM-DD' },
+          client_name: { type: 'string', description: 'имя клиента, если он его назвал' },
+        },
+        required: ['service_id', 'master_id', 'date'],
       },
     },
   },
@@ -466,6 +487,45 @@ async function toolRescheduleBooking(phone, { appointment_id, date, start_time }
   };
 }
 
+// The queue needs a master: it is FIFO per (master, date), and "любой
+// мастер" has nobody to free a slot. The agent picks one and says whose
+// queue it is, the same way it picks a master for a booking.
+async function toolJoinWaitlist(phone, { service_id, master_id, date, client_name }) {
+  if (!(await waitlistEnabled())) return { error: 'Лист ожидания сейчас не работает' };
+
+  const service = await db.getService(service_id);
+  if (!service) return { error: 'Услуга не найдена' };
+  const master = await db.getMaster(master_id);
+  if (!master) return { error: 'Мастер не найден' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { error: 'Дата должна быть в формате YYYY-MM-DD' };
+  if (isPastDate(date)) return { error: 'Эта дата уже прошла' };
+  if (await beyondHorizon(date)) return { error: 'На эту дату запись ещё не открыта — она слишком далеко' };
+
+  // Free time on the date means there is nothing to wait for — booking it is
+  // the answer, and a queue entry behind an empty slot would never fire.
+  const free = await slotsFor(master_id, date, service);
+  if (free.length) {
+    return {
+      error: 'На эту дату есть свободное время — предложи записаться, очередь не нужна',
+      free: free.map(s => s.start).slice(0, MAX_TIMES_LISTED),
+    };
+  }
+
+  if (client_name) await db.setUserNameIfUnknown(phone, client_name.trim().slice(0, 80));
+
+  const result = await joinWaitlist({ userId: phone, masterId: master_id, serviceId: service_id, date });
+  if (result.reason === 'disabled') return { error: 'Лист ожидания сейчас не работает' };
+
+  return {
+    ok: true,
+    already_waiting: result.reason === 'already_waiting',
+    service: service.name,
+    master: master.name,
+    date,
+    date_human: formatDateFull(date),
+  };
+}
+
 async function toolCancelBooking(phone, { appointment_id }) {
   const appt = await db.getAppointmentById(appointment_id);
   if (!appt || appt.status !== 'confirmed' || appt.user_id !== phone) {
@@ -483,6 +543,7 @@ async function runTool(phone, name, args) {
     case 'create_booking':     return toolCreateBooking(phone, args);
     case 'list_my_bookings':   return toolListMyBookings(phone);
     case 'reschedule_booking': return toolRescheduleBooking(phone, args);
+    case 'join_waitlist':      return toolJoinWaitlist(phone, args);
     case 'cancel_booking':     return toolCancelBooking(phone, args);
     default: return { error: `Неизвестный инструмент ${name}` };
   }
@@ -495,12 +556,13 @@ export async function runAgent(phone, userText) {
   if (!agentEnabled()) return null;
 
   const system = await buildSystemPrompt(phone);
+  const tools = (await waitlistEnabled()) ? TOOLS : TOOLS.filter(t => t.function.name !== 'join_waitlist');
   const turn = [{ role: 'user', content: userText }];
   const messages = [{ role: 'system', content: system }, ...getHistory(phone), ...turn];
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const message = await chat({ messages, tools: TOOLS });
+      const message = await chat({ messages, tools });
       messages.push(message);
 
       const calls = message.tool_calls || [];

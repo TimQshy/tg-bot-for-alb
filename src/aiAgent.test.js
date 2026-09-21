@@ -14,7 +14,10 @@ process.env.DEEPSEEK_API_KEY = 'test-key';
 const SERVICE = { id: 7, name: 'Маникюр', price: '1500.00', duration_minutes: 60, slot_step_minutes: 30 };
 const MASTER = { id: 3, name: 'Айгуль', description: null };
 const CLIENT = '996700111222';
-const DATE = '2026-09-19';
+// Three days out, computed rather than written down: a hardcoded date turns
+// into a past one on its own and every booking test then fails on
+// "эта дата уже прошла" instead of on what it was checking.
+const DATE = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
 
 // Free 10:00 and 15:00, busy 11:00 — what check_availability should report
 // and what create_booking must hold the model to.
@@ -96,6 +99,20 @@ mock.module('./booking.js', {
     rescheduleAppointmentFor: async (phone, id, data) => {
       rescheduled.push({ phone, id, ...data });
       return { id };
+    },
+  },
+});
+
+// Mocked whole, not just to keep the real module's database out: waitlist.js
+// imports booking.js, which is itself mocked here without the exports it
+// wants.
+const joined = [];
+mock.module('./waitlist.js', {
+  namedExports: {
+    waitlistEnabled: async () => true,
+    join: async entry => {
+      joined.push(entry);
+      return { ok: true, entry: { id: 7, ...entry } };
     },
   },
 });
@@ -241,4 +258,34 @@ test('модель, зациклившаяся на инструментах, н
   );
 
   assert.equal(await runAgent(CLIENT, 'а когда?'), null);
+});
+
+test('дата без свободного времени — клиент уходит в лист ожидания', async () => {
+  clearHistory(CLIENT);
+  joined.length = 0;
+  const free = SLOTS.splice(0, SLOTS.length); // на эту дату не осталось ничего
+  replies = [
+    toolCall('join_waitlist', { service_id: SERVICE.id, master_id: MASTER.id, date: DATE }),
+    answer('Поставила вас в очередь — освободится место, напишу первой.'),
+  ];
+
+  const reply = await runAgent(CLIENT, 'хочу именно в эту дату, поставьте в очередь');
+  SLOTS.push(...free);
+
+  assert.deepEqual(joined, [{ userId: CLIENT, masterId: MASTER.id, serviceId: SERVICE.id, date: DATE }]);
+  assert.match(reply, /очередь/i);
+});
+
+test('на дату есть свободное время — в очередь не ставим, зовём записаться', async () => {
+  clearHistory(CLIENT);
+  joined.length = 0;
+  replies = [
+    toolCall('join_waitlist', { service_id: SERVICE.id, master_id: MASTER.id, date: DATE }),
+    answer('На эту дату ещё свободно 10:00 и 15:00 — записать?'),
+  ];
+
+  await runAgent(CLIENT, 'поставьте в очередь на эту дату');
+
+  assert.equal(joined.length, 0);
+  assert.deepEqual(lastToolResult().free, ['10:00', '15:00']);
 });

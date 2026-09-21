@@ -730,6 +730,20 @@ export const db = {
     return rows[0];
   },
 
+  // Is this person already in the queue for that master and date? Both entry
+  // points ask before inserting: joining twice would mean two offers for the
+  // same freed slot and a second place in a FIFO that is meant to be fair.
+  async findActiveWaitlistFor(userId, masterId, date) {
+    const { rows } = await pool.query(
+      `SELECT * FROM waitlist
+       WHERE user_id=$1 AND master_id=$2 AND desired_date=$3
+         AND status IN ('waiting','offered')
+       ORDER BY created_at LIMIT 1`,
+      [userId, masterId, date]
+    );
+    return rows[0];
+  },
+
   // Oldest still-waiting entry for this master/date (FIFO).
   async getNextWaiting(masterId, date) {
     const { rows } = await pool.query(

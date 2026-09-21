@@ -517,6 +517,18 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       </div>
       <p class="hint">Выключенный бот молчит везде: не отвечает в WhatsApp, не шлёт напоминания о визитах и не отвечает на комментарии в Instagram. Входящие сообщения всё равно сохраняются, записи и эта панель работают как обычно.</p>
 
+      <h2 class="subhead">Лист ожидания</h2>
+      <div class="card" style="padding:0">
+        <div class="row">
+          <span class="row__main">
+            <span class="row__title">Очередь на занятые даты</span>
+            <span class="row__sub" id="waitlistStateSub">Загружаем…</span>
+          </span>
+          <button class="switch" role="switch" id="waitlistSwitch" aria-checked="true"></button>
+        </div>
+      </div>
+      <p class="hint">Клиент выбрал дату, а свободного времени на ней нет — бот предлагает встать в очередь. Кто-то отменяет запись, и освободившееся время уходит первому в очереди; не ответил за 30 минут — предложение переходит к следующему. Выключено — бот про очередь не заговорит и предложений не разошлёт, но те, кто уже в ней стоит, из базы никуда не денутся.</p>
+
       <h2 class="subhead">Доступы</h2>
       <p class="hint" style="margin:-4px 0 10px">Можно пригласить заранее, а можно выдать доступ тому, кто зарегистрировался сам</p>
       <div class="card invite-card">
@@ -891,7 +903,7 @@ function goto(name) {
   if (name === 'mastera') loadMasters();
   if (name === 'salon') { loadServices(); loadSettings(); }
   if (name === 'instagram') { loadIgReplies(); loadIgKnowledge(); loadIgClosedText(); }
-  if (name === 'sysadmin') { loadBotState(); loadAccess(); }
+  if (name === 'sysadmin') { loadBotState(); loadWaitlistState(); loadAccess(); }
   if (name === 'whatsapp') { startWaPolling(); loadWaReplies(); } else stopWaPolling();
 }
 document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => goto(b.dataset.goto)));
@@ -1265,6 +1277,53 @@ document.getElementById('botSwitch').addEventListener('click', () => {
     text: 'Клиенты перестанут получать ответы и напоминания — и в WhatsApp, и в Instagram — пока бота не включат обратно.',
     action: 'Выключить',
     onConfirm: async () => { closeSheet(); await setBotState(false); },
+  });
+});
+
+// ── Лист ожидания ──────────────────────────────────────────────────────
+function renderWaitlistState(enabled) {
+  document.getElementById('waitlistSwitch').setAttribute('aria-checked', String(enabled));
+  document.getElementById('waitlistStateSub').textContent = enabled
+    ? 'Бот предлагает очередь на занятые даты'
+    : 'Выключен — про очередь бот не заговорит';
+}
+
+async function loadWaitlistState() {
+  try {
+    renderWaitlistState((await api('/api/waitlist-state')).enabled);
+  } catch {
+    document.getElementById('waitlistStateSub').textContent = 'Не удалось узнать состояние';
+  }
+}
+
+async function setWaitlistState(enabled) {
+  renderWaitlistState(enabled);
+  try {
+    renderWaitlistState((await api('/api/waitlist-state', {
+      method: 'PUT', body: JSON.stringify({ enabled }),
+    })).enabled);
+    toast(enabled ? 'Лист ожидания включён' : 'Лист ожидания выключен');
+  } catch {
+    renderWaitlistState(!enabled);
+    toast('Не получилось переключить');
+  }
+}
+
+// Unlike the kill switch this asks in both directions: switching off leaves
+// people already queued waiting for an offer that will never come, and
+// switching on starts promising callbacks the salon has to honour.
+document.getElementById('waitlistSwitch').addEventListener('click', () => {
+  const enabled = document.getElementById('waitlistSwitch').getAttribute('aria-checked') !== 'true';
+  openConfirm(enabled ? {
+    title: 'Включить лист ожидания?',
+    text: 'Бот снова начнёт предлагать очередь на занятые даты и писать людям, когда место освободилось.',
+    action: 'Включить',
+    onConfirm: async () => { closeSheet(); await setWaitlistState(true); },
+  } : {
+    title: 'Выключить лист ожидания?',
+    text: 'Бот перестанет предлагать очередь, а тем, кто уже в ней стоит, не напишет об освободившемся месте. Записи в очереди сохранятся.',
+    action: 'Выключить',
+    onConfirm: async () => { closeSheet(); await setWaitlistState(false); },
   });
 });
 

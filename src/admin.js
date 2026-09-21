@@ -72,6 +72,21 @@ adminRouter.put('/api/bot-state', requireSystemAdmin, async (req, res) => {
   res.json({ enabled });
 });
 
+// ── Waitlist on/off ──────────────────────────────────────────────────────
+// Sits next to the kill switch and is flipped by the same people: a queue is
+// a promise to call someone back, and a salon that isn't going to keep it is
+// better off without the feature than with an unanswered offer.
+adminRouter.get('/api/waitlist-state', async (_req, res) => {
+  res.json({ enabled: await waitlist.waitlistEnabled() });
+});
+
+adminRouter.put('/api/waitlist-state', requireSystemAdmin, async (req, res) => {
+  if (typeof req.body?.enabled !== 'boolean') return res.status(400).json({ error: 'missing_fields' });
+  const enabled = await waitlist.setWaitlistEnabled(req.body.enabled);
+  console.log(`[waitlist] ${enabled ? 'enabled' : 'disabled'} by ${req.admin.userId}`);
+  res.json({ enabled });
+});
+
 // ── Access control (Clerk) ───────────────────────────────────────────────
 // Instance-wide, not per salon — any container can serve it, they all hold
 // the same CLERK_SECRET_KEY. Access is granted through public metadata:
