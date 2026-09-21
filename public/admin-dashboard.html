@@ -237,6 +237,17 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
 .hoursrow__hours{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:14px}
 .brk{display:inline-flex;align-items:center;height:22px;padding:0 8px;margin:5px 5px 0 0;border-radius:var(--r-pill);background:var(--warn-soft);color:var(--warn);font-size:11.5px;font-family:var(--font-num)}
 .ovr-badge{display:block;margin-top:5px;font-size:11.5px;color:var(--warn)}
+/* Queue card: close to an appointment card, but flat — a place in a queue is
+   not an event on a timeline, so it gets no rail and no time gutter. */
+.wl{padding:14px;margin-bottom:10px}
+.wl__top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.wl__client{font-size:15px;font-weight:600}
+.wl__pos{font-family:var(--font-num);font-size:12px;color:var(--ink-3)}
+.wl__svc{margin:2px 0 8px;font-size:13.5px;color:var(--ink-2)}
+.wl__meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.wl__actions{display:flex;gap:8px;margin-top:12px}
+.wl__actions .btn{flex:1}
+.wl__date{font-size:12.5px;color:var(--ink-3);margin:16px 0 8px;font-weight:600}
 .cal{padding:12px}
 .cal__head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .cal__title{font-size:15px;font-weight:600}
@@ -347,7 +358,11 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
 
     <!-- ================= ЗАПИСИ ================= -->
     <main class="col screen" id="screen-zapisi">
-      <div class="screen-head"><h1>Записи</h1><p>Проведите по датам, чтобы выбрать день</p></div>
+      <div class="screen-head"><h1 id="zapisiTitle">Записи</h1><p id="zapisiSub">Проведите по датам, чтобы выбрать день</p></div>
+      <div class="seg" id="zapisiSeg" role="tablist" aria-label="Вид">
+        <button class="seg__btn" role="tab" data-view="appts" aria-selected="true">Записи</button>
+        <button class="seg__btn" role="tab" data-view="waitlist" aria-selected="false">Лист ожидания<span id="waitCount"></span></button>
+      </div>
       <div class="days" id="dayStrip" role="group" aria-label="Выбор даты"></div>
       <div class="filters" role="group" aria-label="Фильтры">
         <button class="chip chip--on" id="chipMaster" data-sheet="sheet-master">Все мастера
@@ -364,6 +379,15 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
         <h3>На этот день записей нет</h3>
         <p>Можно добавить запись прямо сейчас.</p>
         <button class="btn btn--primary" id="emptyAddBtn">Добавить запись</button>
+      </div>
+
+      <div id="waitlistView" hidden>
+        <p class="hint" id="waitlistLead"></p>
+        <div id="waitlistList"></div>
+        <div class="empty" id="waitlistEmpty" hidden>
+          <h3>В очереди никого нет</h3>
+          <p>Сюда попадают клиенты, которым не хватило времени на занятую дату.</p>
+        </div>
       </div>
     </main>
 
@@ -875,6 +899,8 @@ const state = {
   filterMasterId: null,   // null = all
   filterStatus: 'confirmed',
   appts: [],              // currently rendered day's appointments
+  zapisiView: 'appts',    // 'appts' | 'waitlist'
+  waitlist: [],           // the queue, as last loaded
   weekCounts: {},         // date -> count, for day-strip dots
   dayCache: {},           // "masterId|date" -> promise of /api/schedule/day
   hoursMasterId: null,
@@ -907,6 +933,12 @@ function goto(name) {
   if (name === 'whatsapp') { startWaPolling(); loadWaReplies(); } else stopWaPolling();
 }
 document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => goto(b.dataset.goto)));
+
+// The badge on the segment is loaded with the day, so the salon sees there is
+// a queue without opening it.
+async function refreshWaitCount() {
+  try { renderWaitCount((await api('/api/waitlist')).length); } catch {}
+}
 
 // ── Salon settings ─────────────────────────────────────────────────────
 // The preview is the exact string the bot sends, built by the same rules as
@@ -1544,7 +1576,8 @@ document.getElementById('themeBtn').addEventListener('click', () => {
 });
 document.getElementById('logoutBtn').addEventListener('click', () => clerk.signOut());
 document.getElementById('refreshBtn').addEventListener('click', () => {
-  loadAppointments(); loadWeekCounts();
+  if (state.zapisiView === 'waitlist') loadWaitlist(); else loadAppointments();
+  loadWeekCounts(); refreshWaitCount();
   if (!document.getElementById('screen-salon').hidden) loadServices();
   if (!document.getElementById('screen-master').hidden) renderHoursView();
 });
@@ -1671,7 +1704,148 @@ document.querySelector('[data-sheet="sheet-date"]').addEventListener('click', ()
 });
 
 // ── Appointments / timeline ────────────────────────────────────────────
+// ── Лист ожидания ──────────────────────────────────────────────────────
+// A second view over the same screen rather than a tab of its own: the queue
+// only makes sense next to the day it is waiting for, and the salon switches
+// between the two constantly.
+function setZapisiView(view) {
+  state.zapisiView = view;
+  document.querySelectorAll('#zapisiSeg .seg__btn').forEach(b =>
+    b.setAttribute('aria-selected', String(b.dataset.view === view)));
+
+  // The queue is grouped by the date each person is waiting for and spans
+  // several days at once, so the day strip and the day's filters would only
+  // suggest a filter that isn't being applied.
+  const isWaitlist = view === 'waitlist';
+  for (const id of ['dayStrip', 'dayBar', 'timeline']) document.getElementById(id).hidden = isWaitlist;
+  document.querySelector('#screen-zapisi .filters').hidden = isWaitlist;
+  document.getElementById('waitlistView').hidden = !isWaitlist;
+  document.getElementById('zapisiSub').textContent = isWaitlist
+    ? 'Кто ждёт освободившееся время'
+    : 'Проведите по датам, чтобы выбрать день';
+  document.getElementById('fabAdd').hidden = isWaitlist;
+  if (isWaitlist) {
+    document.getElementById('emptyState').hidden = true;
+    loadWaitlist();
+  } else {
+    document.getElementById('waitlistEmpty').hidden = true;
+    loadAppointments();
+  }
+}
+document.getElementById('zapisiSeg').addEventListener('click', e => {
+  const b = e.target.closest('.seg__btn');
+  if (b) setZapisiView(b.dataset.view);
+});
+
+// What the bot has already done with this person, in the salon's words.
+function waitlistStatus(row) {
+  if (row.status === 'booked') return '<span class="status status--ok"><i></i>записан</span>';
+  if (row.status === 'cancelled') return '<span class="status status--off"><i></i>снят с очереди</span>';
+  if (row.offer_status === 'sent') {
+    return `<span class="status status--wait"><i></i>предложено ${fmtTime(row.offer_start)}, ждём ответа</span>`;
+  }
+  if (row.offer_status === 'declined') {
+    return `<span class="status status--off"><i></i>отказался от ${fmtTime(row.offer_start)}</span>`;
+  }
+  if (row.offer_status === 'expired') {
+    return `<span class="status status--off"><i></i>не ответил на ${fmtTime(row.offer_start)}</span>`;
+  }
+  return '<span class="status status--wait"><i></i>в очереди</span>';
+}
+
+function waitlistCardHtml(row, position) {
+  const canCall = !isWalkIn(row.user_id);
+  return `
+    <article class="card wl">
+      <div class="wl__top">
+        <h2 class="wl__client">${escapeHtml(row.user_name || row.user_id)}</h2>
+        <span class="wl__pos">${position}-й в очереди</span>
+      </div>
+      <p class="wl__svc">${escapeHtml(row.service_name)} · ${escapeHtml(row.master_name)}</p>
+      <div class="wl__meta">${waitlistStatus(row)}</div>
+      <div class="wl__actions">
+        <button class="btn btn--soft" data-wl-offer="${row.id}">Предложить сейчас</button>
+        ${canCall ? `<a class="btn btn--soft" href="tel:+${row.user_id}">Позвонить</a>` : ''}
+        <button class="btn btn--danger" data-wl-remove="${row.id}">Снять</button>
+      </div>
+    </article>`;
+}
+
+async function loadWaitlist() {
+  const list = document.getElementById('waitlistList');
+  const empty = document.getElementById('waitlistEmpty');
+  const lead = document.getElementById('waitlistLead');
+
+  let rows;
+  try {
+    rows = await api('/api/waitlist');
+  } catch {
+    list.innerHTML = '';
+    lead.textContent = 'Не удалось загрузить лист ожидания';
+    return;
+  }
+
+  state.waitlist = rows;
+  renderWaitCount(rows.length);
+  empty.hidden = rows.length > 0;
+  lead.textContent = rows.length
+    ? 'Освободится время — бот сам напишет первому в очереди и подождёт ответа до конца дня. Можно не ждать: позвоните и отправьте предложение сами.'
+    : '';
+
+  // Grouped by the date being waited for: a queue for Saturday and a queue
+  // for Sunday are separate queues, and the position counts within each.
+  const byDate = new Map();
+  for (const row of rows) {
+    const date = String(row.desired_date).slice(0, 10);
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push(row);
+  }
+
+  list.innerHTML = [...byDate.entries()].map(([date, group]) =>
+    `<p class="wl__date">${fmtDayShort(date)}</p>` +
+    group.map((row, i) => waitlistCardHtml(row, i + 1)).join('')
+  ).join('');
+}
+
+function renderWaitCount(n) {
+  document.getElementById('waitCount').textContent = n ? ` · ${n}` : '';
+}
+
+document.getElementById('waitlistList').addEventListener('click', async e => {
+  const offerBtn = e.target.closest('[data-wl-offer]');
+  if (offerBtn) {
+    offerBtn.disabled = true;
+    try {
+      await api(`/api/waitlist/${offerBtn.dataset.wlOffer}/offer`, { method: 'POST' });
+      toast('Предложение отправлено');
+    } catch (err) {
+      toast(err.error === 'no_slots' ? 'На эту дату нет свободного времени'
+        : err.error === 'offer_pending' ? 'На эту дату уже ждём ответа'
+        : 'Не получилось отправить');
+    }
+    return loadWaitlist();
+  }
+
+  const removeBtn = e.target.closest('[data-wl-remove]');
+  if (!removeBtn) return;
+  const row = state.waitlist.find(r => String(r.id) === removeBtn.dataset.wlRemove);
+  openConfirm({
+    title: 'Снять с очереди?',
+    text: `${row ? row.user_name || row.user_id : 'Клиент'} больше не получит предложений на эту дату.`,
+    action: 'Снять',
+    onConfirm: async () => {
+      closeSheet();
+      try {
+        await api(`/api/waitlist/${removeBtn.dataset.wlRemove}`, { method: 'DELETE' });
+        toast('Сняли с очереди');
+      } catch { toast('Не получилось снять'); }
+      loadWaitlist();
+    },
+  });
+});
+
 async function loadAppointments() {
+  if (state.zapisiView === 'waitlist') return;
   const qs = new URLSearchParams({ date: state.date });
   if (state.filterMasterId) qs.set('masterId', state.filterMasterId);
   if (state.filterStatus) qs.set('status', state.filterStatus);
@@ -1820,6 +1994,8 @@ function apptCardHtml(a, isConflict = false) {
           <span class="appt__dur">${durMin} мин · до ${fmtTime(a.end_time)}</span>
           ${statusPill(a.status)}
           ${isWalkIn(a.user_id) ? '<span class="status status--off"><i></i>без телефона</span>' : ''}
+          ${a.confirmed_at ? '<span class="status status--ok"><i></i>подтвердил</span>'
+            : a.confirm_request_sent ? '<span class="status status--wait"><i></i>не подтвердил</span>' : ''}
           ${isConflict ? '<span class="status status--conflict"><i></i>конфликт</span>' : ''}
         </div>
         ${isConfirmed ? `
@@ -1971,14 +2147,15 @@ function openCancelSheet(apptId) {
   if (!appt) return;
   state.move.cancelApptId = appt.id;
   document.getElementById('cancelCtx').textContent =
-    `${appt.user_name} — ${appt.service_name}, ${fmtTime(appt.start_time)}–${fmtTime(appt.end_time)}. Клиент получит уведомление, слот снова станет свободным.`;
+    `${appt.user_name} — ${appt.service_name}, ${fmtTime(appt.start_time)}–${fmtTime(appt.end_time)}. Клиент получит уведомление, слот снова станет свободным и уйдёт первому в листе ожидания.`;
   openSheet('sheet-cancel');
 }
 document.getElementById('cancelSubmitBtn').addEventListener('click', async () => {
   const id = state.move.cancelApptId;
   await api(`/api/appointments/${id}/cancel`, { method: 'POST' });
   closeSheet(); toast('Запись отменена');
-  loadAppointments(); loadWeekCounts();
+  // The freed slot goes to the queue, so its badge is stale from here on.
+  loadAppointments(); loadWeekCounts(); refreshWaitCount();
 });
 
 // ── Услуги ────────────────────────────────────────────────────────────
@@ -2802,7 +2979,7 @@ async function initAuth() {
     renderMasterFilterList();
     state.services = await api('/api/services');
     renderDayStrip();
-    await Promise.all([loadAppointments(), loadWeekCounts()]);
+    await Promise.all([loadAppointments(), loadWeekCounts(), refreshWaitCount()]);
   } catch (err) {
     if (err && err.error === 'forbidden_salon') {
       fatal('Нет доступа к салону', 'Эта учётная запись не может открыть выбранный салон.');

@@ -1,15 +1,28 @@
-// Waitlist: FIFO per (master, date). When someone cancels, the oldest
-// waiting entry for that master/date gets offered the freed-up slot and has
-// a timeout to accept before we move to the next person in line.
+// Waitlist: FIFO per (master, date). When a slot frees up, the person who has
+// been waiting longest is offered it and has until the end of the day to say
+// yes; after that the same window moves on to the next person in line.
+//
+// A place in the queue and an offer are different things and live in
+// different tables. The queue row (`waitlist`) is the promise: you keep your
+// place until the salon takes you off it, whether you answered the last
+// offer, said no, or never replied. The offer row (`waitlist_offer`) is one
+// window, asked once — which is also what stops the same person being
+// offered the same slot again the moment their silence expires.
 import { db } from './database.js';
 import { sendText } from './whatsapp.js';
 import { sendMenu } from './menu.js';
 import { getSession, clearSession } from './session.js';
-import { formatDateFull } from './utils.js';
+import { formatDateFull, todayStr, nowMinutes } from './utils.js';
 import { getFreeSlotsForService } from './schedule.js';
 import { sendAddress, sendMainMenu } from './booking.js';
 
 const ADMIN_PHONES = () => (process.env.ADMIN_PHONES || '').split(',').map(s => s.trim()).filter(Boolean);
+
+// Offers are not sent in the middle of the night. An offer that arrives at
+// 03:00 is read in the morning anyway, and it would have burnt the whole
+// "until the end of the day" window while the client slept.
+const QUIET_BEFORE_MIN = 9 * 60;
+const QUIET_AFTER_MIN = 21 * 60;
 
 // ── Feature switch ─────────────────────────────────────────────────────────
 // Some salons don't want a queue at all: a message about a freed slot three
@@ -45,6 +58,7 @@ export function clearWaitlistStateCache() {
   cachedAt = 0;
 }
 
+// ── Joining ────────────────────────────────────────────────────────────────
 // Shared by both entry points — the numbered flow and the AI agent — so the
 // rules about switching off and joining twice hold wherever someone asks.
 // Returns what happened rather than a message, because the two callers word
@@ -59,7 +73,11 @@ export async function join({ userId, masterId, serviceId, date }) {
   return { ok: true, entry };
 }
 
-// ── Join (triggered from booking.js when a chosen date has no free slots) ──
+export const JOINED_TEXT =
+  'Мы внесли вас в лист ожидания! Как только освободится подходящее время, ' +
+  'мы сразу свяжемся с вами. Запись будет фиксироваться в один клик.';
+
+// ── Join from the numbered flow ────────────────────────────────────────────
 export async function handleJoin(phone) {
   const session = getSession(phone);
   if (!session || session.step !== 'waitlist_offer') return sendMainMenu(phone);
@@ -82,73 +100,119 @@ export async function handleJoin(phone) {
     result.reason === 'already_waiting'
       ? `Вы уже в листе ожидания на ${formatDateFull(session.date)} к ${session.masterName}. ` +
         `Освободится место — напишем.`
-      : `✅ Вы в листе ожидания на ${formatDateFull(session.date)} к ${session.masterName}.\n` +
-        `Если кто-то отменит запись — напишем вам первому.`
+      : `✅ ${formatDateFull(session.date)}, ${session.masterName}.\n\n${JOINED_TEXT}`
   );
   return sendMainMenu(phone);
 }
 
-// ── Called right after any cancellation for (masterId, date) ───────────────
-export async function notifyNext(masterId, date) {
-  if (!(await waitlistEnabled())) return;
+// ── Sending an offer ───────────────────────────────────────────────────────
+// The first free window on that date, offered to the first person in line who
+// hasn't already been asked about it. One live offer per master/date: the
+// queue is FIFO, and two offers out at once would race two clients for one
+// slot.
+export async function notifyNext(masterId, date, { force = false } = {}) {
+  if (!(await waitlistEnabled())) return null;
+  if (date < todayStr()) return null;
+  if (!force && !withinSendingHours()) return null;
 
-  const entry = await db.getNextWaiting(masterId, date);
-  if (!entry) return;
+  // A live offer holds the queue for that date — but only while the window it
+  // names is still there. Someone else booking it (a walk-in, the panel)
+  // would otherwise freeze the queue until the end of the day for a slot that
+  // no longer exists.
+  const live = await db.getLiveOffer(masterId, date);
+  if (live) {
+    if (await db.isSlotAvailable(masterId, date, live.start_time, live.end_time)) return null;
+    await db.markWaitlistOfferStatus(live.id, 'expired');
+  }
 
-  // entry carries the service's duration, step, start window and day block
-  // (see db.getNextWaiting), so an offer never breaks a rule the booking
-  // flow would have enforced.
-  const slots = await getFreeSlotsForService(entry, masterId, date);
-  if (!slots.length) return; // freed gap doesn't fit this service's duration yet
+  // Offers are per window, so the candidate and the window have to be found
+  // together: a colouring that needs four hours and a 30-minute gap are not
+  // the same opening. The first free slot is found per candidate, in queue
+  // order, and the first pair that fits wins.
+  const slots = await freeSlotsForWaiting(masterId, date);
+  if (!slots.length) return null;
 
-  const slot = slots[0];
-  await db.markWaitlistOffered(entry.id, { startTime: slot.start, endTime: slot.end });
-
-  const full = await db.getWaitlistEntry(entry.id);
-  await sendMenu(
-    entry.user_id,
-    `🎉 Освободилось место!\n\n` +
-      `💅 ${full.service_name}\n👩 ${full.master_name}\n` +
-      `📅 ${formatDateFull(date)}\n🕐 ${slot.start} – ${slot.end}\n\n` +
-      `Записать вас?`,
-    [
-      { id: `waitlist:confirm:${entry.id}`, label: '✅ Да, записать' },
-      { id: `waitlist:decline:${entry.id}`, label: '❌ Нет, спасибо' },
-    ]
-  );
+  for (const { entry, slot } of slots) {
+    const next = await db.getNextWaitingFor(masterId, date, slot.start, slot.end);
+    if (!next || next.id !== entry.id) continue;
+    return sendOffer(entry, date, slot);
+  }
+  return null;
 }
 
-// ── Client responds to an offer ─────────────────────────────────────────────
+// Waiting entries paired with the first window that actually fits their
+// service, in queue order.
+async function freeSlotsForWaiting(masterId, date) {
+  const pairs = [];
+  for (const entry of await db.listWaitlist({ date, masterId })) {
+    if (entry.status !== 'waiting') continue;
+    const service = await db.getService(entry.service_id);
+    if (!service) continue;
+    const free = await getFreeSlotsForService(service, masterId, date);
+    if (free.length) pairs.push({ entry, slot: free[0] });
+  }
+  return pairs;
+}
+
+async function sendOffer(entry, date, slot) {
+  const offer = await db.createWaitlistOffer(entry.id, {
+    date, startTime: slot.start, endTime: slot.end,
+  });
+  const full = await db.getWaitlistOffer(offer.id);
+
+  await sendMenu(
+    entry.user_id,
+    `🎉 Освободилось окно на ${formatDateFull(date)}, ${slot.start} – ${slot.end}!\n\n` +
+      `💅 ${full.service_name}\n👩 ${full.master_name}\n\n` +
+      `Вы первый в очереди, поэтому это время держим за вами. ` +
+      `Нажмите «Записаться», чтобы подтвердить.`,
+    [
+      { id: `waitlist:confirm:${offer.id}`, label: '✅ Записаться' },
+      { id: `waitlist:decline:${offer.id}`, label: '❌ Не смогу' },
+    ]
+  );
+  return offer;
+}
+
+// Offers go out during the day. Called on cancellations, which can happen at
+// any hour; the sweep picks up whatever was held back overnight.
+function withinSendingHours() {
+  const min = nowMinutes();
+  return min >= QUIET_BEFORE_MIN && min < QUIET_AFTER_MIN;
+}
+
+// ── Client responds ────────────────────────────────────────────────────────
 export async function handleOfferConfirm(phone, idStr) {
   const id = parseInt(idStr, 10);
-  const entry = await db.getWaitlistEntry(id);
-  if (!entry || entry.user_id !== phone || entry.status !== 'offered') {
+  const offer = await db.getWaitlistOffer(id);
+  if (!offer || offer.user_id !== phone || offer.status !== 'sent') {
     return sendText(phone, 'Это предложение уже неактуально.');
   }
 
-  const available = await db.isSlotAvailable(entry.master_id, entry.desired_date, entry.offered_start_time, entry.offered_end_time);
+  const available = await db.isSlotAvailable(offer.master_id, offer.desired_date, offer.start_time, offer.end_time);
   if (!available) {
-    await db.markWaitlistStatus(id, 'expired');
+    await db.markWaitlistOfferStatus(id, 'expired');
     await sendText(phone, '😔 Это время уже заняли. Вы остаётесь в очереди на случай следующей отмены.');
-    return notifyNext(entry.master_id, entry.desired_date);
+    return notifyNext(offer.master_id, dateOf(offer.desired_date), { force: true });
   }
 
   const appt = await db.createAppointment({
     userId: phone,
-    masterId: entry.master_id,
-    serviceId: entry.service_id,
-    date: entry.desired_date,
-    startTime: entry.offered_start_time,
-    endTime: entry.offered_end_time,
+    masterId: offer.master_id,
+    serviceId: offer.service_id,
+    date: offer.desired_date,
+    startTime: offer.start_time,
+    endTime: offer.end_time,
   });
-  await db.markWaitlistStatus(id, 'booked');
+  await db.markWaitlistOfferStatus(id, 'accepted');
+  await db.markWaitlistStatus(offer.waitlist_id, 'booked');
 
   await sendText(
     phone,
     `🎉 Запись подтверждена!\n\n` +
-      `💅 ${entry.service_name}\n👩 ${entry.master_name}\n` +
-      `📅 ${formatDateFull(entry.desired_date)}\n` +
-      `🕐 ${String(entry.offered_start_time).slice(0, 5)} – ${String(entry.offered_end_time).slice(0, 5)}\n\n` +
+      `💅 ${offer.service_name}\n👩 ${offer.master_name}\n` +
+      `📅 ${formatDateFull(dateOf(offer.desired_date))}\n` +
+      `🕐 ${String(offer.start_time).slice(0, 5)} – ${String(offer.end_time).slice(0, 5)}\n\n` +
       `📋 Номер записи: #${appt.id}`
   );
   await sendAddress(phone);
@@ -156,31 +220,76 @@ export async function handleOfferConfirm(phone, idStr) {
   for (const adminPhone of ADMIN_PHONES()) {
     sendText(
       adminPhone,
-      `📩 Запись из листа ожидания #${appt.id}\n👤 ${phone}\n💅 ${entry.service_name}\n👩 ${entry.master_name}\n📅 ${formatDateFull(entry.desired_date)}`
+      `📩 Запись из листа ожидания #${appt.id}\n👤 ${phone}\n💅 ${offer.service_name}\n` +
+        `👩 ${offer.master_name}\n📅 ${formatDateFull(dateOf(offer.desired_date))}`
     ).catch(() => {});
   }
 }
 
+// Saying no closes this offer, not the place in the queue: the client asked
+// to be told when this date frees up, and one inconvenient window is not a
+// change of mind. Only the salon takes people off the list.
 export async function handleOfferDecline(phone, idStr) {
   const id = parseInt(idStr, 10);
-  const entry = await db.getWaitlistEntry(id);
-  if (!entry || entry.user_id !== phone || entry.status !== 'offered') return;
+  const offer = await db.getWaitlistOffer(id);
+  if (!offer || offer.user_id !== phone || offer.status !== 'sent') return;
 
-  await db.markWaitlistStatus(id, 'cancelled');
-  await sendText(phone, 'Хорошо, сняли вас с очереди.');
-  return notifyNext(entry.master_id, entry.desired_date);
+  await db.markWaitlistOfferStatus(id, 'declined');
+  await sendText(
+    phone,
+    'Хорошо, это время не предлагаем. Вы остаётесь в очереди — освободится другое, напишем.'
+  );
+  return notifyNext(offer.master_id, dateOf(offer.desired_date), { force: true });
 }
 
-// ── Called by the scheduler: offers nobody answered in time ────────────────
-export async function expireStaleOffers(timeoutMin) {
-  // Switched off mid-offer: the offer is left as it is rather than expired,
-  // so turning the queue back on does not silently drop whoever was holding
-  // one. notifyNext is the thing that stays quiet.
+// ── Scheduler jobs ─────────────────────────────────────────────────────────
+// Offers nobody answered by the end of the day, and windows that opened up
+// without a cancellation to announce them — the salon adding hours, or a
+// client's earlier decline. Both end in the same place: ask the next person.
+export async function runWaitlistSweep() {
   if (!(await waitlistEnabled())) return;
 
-  const stale = await db.getExpiredWaitlistOffers(timeoutMin);
-  for (const entry of stale) {
-    await db.markWaitlistStatus(entry.id, 'expired');
-    await notifyNext(entry.master_id, entry.desired_date);
+  await db.expireStaleWaitlistOffers();
+
+  if (!withinSendingHours()) return;
+  for (const target of await db.getWaitlistTargets()) {
+    await notifyNext(target.master_id, target.date).catch(err =>
+      console.error(`waitlist sweep failed for master ${target.master_id} on ${target.date}:`, err)
+    );
   }
+}
+
+// ── Panel actions ──────────────────────────────────────────────────────────
+// The salon stepping in: offer this person a slot now, whatever the queue
+// order and whatever the hour. Used when an admin has them on the phone.
+export async function offerEntryNow(entryId) {
+  const entry = await db.getWaitlistEntry(entryId);
+  if (!entry || entry.status !== 'waiting') return { ok: false, reason: 'not_waiting' };
+
+  const live = await db.getLiveOffer(entry.master_id, dateOf(entry.desired_date));
+  if (live) return { ok: false, reason: 'offer_pending', offer: live };
+
+  const service = await db.getService(entry.service_id);
+  const date = dateOf(entry.desired_date);
+  const free = await getFreeSlotsForService(service, entry.master_id, date);
+  if (!free.length) return { ok: false, reason: 'no_slots' };
+
+  const offer = await sendOffer(entry, date, free[0]);
+  return { ok: true, offer };
+}
+
+export async function removeEntry(entryId) {
+  const entry = await db.getWaitlistEntry(entryId);
+  if (!entry) return null;
+  // A live offer to someone being taken off the list would still be
+  // answerable, so it is closed with them.
+  const live = await db.getLiveOffer(entry.master_id, dateOf(entry.desired_date));
+  if (live && live.waitlist_id === entry.id) await db.markWaitlistOfferStatus(live.id, 'expired');
+  return db.markWaitlistStatus(entryId, 'cancelled');
+}
+
+// Postgres hands back a Date for a `date` column; every caller here wants the
+// YYYY-MM-DD string the rest of the code passes around.
+function dateOf(value) {
+  return String(value).slice(0, 10);
 }

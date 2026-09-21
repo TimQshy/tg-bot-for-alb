@@ -87,6 +87,34 @@ adminRouter.put('/api/waitlist-state', requireSystemAdmin, async (req, res) => {
   res.json({ enabled });
 });
 
+// ── Waitlist ─────────────────────────────────────────────────────────────
+// The queue as the salon sees it: who is waiting, what the bot has already
+// offered them, and who has answered. Without a date it shows everything
+// from today on, which is what the panel's own screen asks for.
+adminRouter.get('/api/waitlist', async (req, res) => {
+  const { date, masterId, includeClosed } = req.query;
+  const rows = await db.listWaitlist({
+    date: date || null,
+    masterId: masterId ? parseInt(masterId, 10) : null,
+    includeClosed: includeClosed === '1',
+  });
+  res.json(rows);
+});
+
+// Admin stepping in — they have the client on the phone and want the offer
+// sent now, ahead of the queue and outside the quiet hours.
+adminRouter.post('/api/waitlist/:id/offer', async (req, res) => {
+  const result = await waitlist.offerEntryNow(parseInt(req.params.id, 10));
+  if (!result.ok) return res.status(409).json({ error: result.reason });
+  res.json({ ok: true, offer: result.offer });
+});
+
+adminRouter.delete('/api/waitlist/:id', async (req, res) => {
+  const removed = await waitlist.removeEntry(parseInt(req.params.id, 10));
+  if (!removed) return res.status(404).json({ error: 'not_found' });
+  res.json({ ok: true });
+});
+
 // ── Access control (Clerk) ───────────────────────────────────────────────
 // Instance-wide, not per salon — any container can serve it, they all hold
 // the same CLERK_SECRET_KEY. Access is granted through public metadata:

@@ -144,6 +144,14 @@ CREATE TABLE IF NOT EXISTS appointments (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Asked a couple of days out ("придёте?"), so a dead booking is freed while
+-- someone from the waitlist can still take it. confirmed_at stays null until
+-- the client answers; admin_alert_sent is the nudge to the salon to ring the
+-- ones who never did.
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS confirm_request_sent BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS admin_alert_sent BOOLEAN NOT NULL DEFAULT false;
+
 CREATE INDEX IF NOT EXISTS idx_appt_date   ON appointments(appointment_date);
 CREATE INDEX IF NOT EXISTS idx_appt_user   ON appointments(user_id);
 CREATE INDEX IF NOT EXISTS idx_appt_status ON appointments(status);
@@ -177,6 +185,32 @@ CREATE TABLE IF NOT EXISTS waitlist (
 );
 
 CREATE INDEX IF NOT EXISTS idx_waitlist_lookup ON waitlist(master_id, desired_date, status);
+
+-- Every offer ever sent for a freed slot. Kept apart from the waitlist row
+-- because a place in the queue and an offer have different lifetimes: the
+-- queue is FIFO and a person keeps their place until the salon removes them
+-- by hand, while an offer is one window, sent once, answered or not.
+-- Without this table "already asked about this very slot" has nowhere to
+-- live, and the first person in line would be offered the same window again
+-- the moment their silence expired.
+CREATE TABLE IF NOT EXISTS waitlist_offer (
+  id SERIAL PRIMARY KEY,
+  waitlist_id INTEGER NOT NULL REFERENCES waitlist(id) ON DELETE CASCADE,
+  desired_date DATE NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  status TEXT NOT NULL DEFAULT 'sent'
+    CHECK (status IN ('sent', 'accepted', 'declined', 'expired')),
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  responded_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_waitlist_offer_entry ON waitlist_offer(waitlist_id, status);
+
+-- Offers used to live on the waitlist row itself, which conflated the two
+-- lifetimes above. Anything left in those states predates waitlist_offer:
+-- put it back in line, where it now stays until the salon says otherwise.
+UPDATE waitlist SET status='waiting' WHERE status IN ('offered', 'expired');
 
 -- Baileys (WhatsApp Web protocol) session: creds + signal key store, keyed
 -- by a composite id like "creds" or "app-state-sync-key-<id>". DB-backed
@@ -744,21 +778,6 @@ export const db = {
     return rows[0];
   },
 
-  // Oldest still-waiting entry for this master/date (FIFO).
-  async getNextWaiting(masterId, date) {
-    const { rows } = await pool.query(
-      `SELECT w.*, s.duration_minutes, s.slot_step_minutes,
-              s.earliest_start, s.latest_start, s.blocks_day
-       FROM waitlist w
-       JOIN services s ON s.id = w.service_id
-       WHERE w.master_id=$1 AND w.desired_date=$2 AND w.status='waiting'
-       ORDER BY w.created_at
-       LIMIT 1`,
-      [masterId, date]
-    );
-    return rows[0];
-  },
-
   async getWaitlistEntry(id) {
     const { rows } = await pool.query(
       `SELECT w.*, s.name AS service_name, s.duration_minutes, m.name AS master_name
@@ -771,15 +790,6 @@ export const db = {
     return rows[0];
   },
 
-  async markWaitlistOffered(id, { startTime, endTime }) {
-    const { rows } = await pool.query(
-      `UPDATE waitlist SET status='offered', offered_start_time=$2, offered_end_time=$3, offered_at=NOW()
-       WHERE id=$1 RETURNING *`,
-      [id, startTime, endTime]
-    );
-    return rows[0];
-  },
-
   async markWaitlistStatus(id, status) {
     const { rows } = await pool.query(
       `UPDATE waitlist SET status=$2 WHERE id=$1 RETURNING *`,
@@ -788,14 +798,131 @@ export const db = {
     return rows[0];
   },
 
-  // Offers older than `timeoutMin` minutes ago — expired, move on to next in line.
-  async getExpiredWaitlistOffers(timeoutMin) {
+  // ── Waitlist offers ───────────────────────────────────────────────────────
+  // One offer at a time per master/date: the queue is FIFO, so a second live
+  // offer would mean two people racing for one window.
+  async getLiveOffer(masterId, date) {
     const { rows } = await pool.query(
-      `SELECT * FROM waitlist
-       WHERE status='offered' AND offered_at < NOW() - ($1 || ' minutes')::interval`,
-      [timeoutMin]
+      `SELECT o.*, w.user_id, w.master_id
+       FROM waitlist_offer o
+       JOIN waitlist w ON w.id = o.waitlist_id
+       WHERE w.master_id=$1 AND o.desired_date=$2 AND o.status='sent'
+       ORDER BY o.sent_at LIMIT 1`,
+      [masterId, date]
+    );
+    return rows[0];
+  },
+
+  // Next in line for one particular window: oldest waiting entry that has not
+  // already been asked about this exact slot. Someone who stayed silent or
+  // said no keeps their place in the queue — they are only skipped for the
+  // window they already had their chance at.
+  async getNextWaitingFor(masterId, date, startTime, endTime) {
+    const { rows } = await pool.query(
+      `SELECT w.*, s.duration_minutes, s.slot_step_minutes,
+              s.earliest_start, s.latest_start, s.blocks_day
+       FROM waitlist w
+       JOIN services s ON s.id = w.service_id
+       WHERE w.master_id=$1 AND w.desired_date=$2 AND w.status='waiting'
+         AND NOT EXISTS (
+           SELECT 1 FROM waitlist_offer o
+           WHERE o.waitlist_id = w.id AND o.desired_date=$2
+             AND o.start_time=$3 AND o.end_time=$4
+         )
+       ORDER BY w.created_at
+       LIMIT 1`,
+      [masterId, date, startTime, endTime]
+    );
+    return rows[0];
+  },
+
+  async createWaitlistOffer(waitlistId, { date, startTime, endTime }) {
+    const { rows } = await pool.query(
+      `INSERT INTO waitlist_offer (waitlist_id, desired_date, start_time, end_time)
+       VALUES ($1,$2,$3,$4) RETURNING *`,
+      [waitlistId, date, startTime, endTime]
+    );
+    return rows[0];
+  },
+
+  async getWaitlistOffer(id) {
+    const { rows } = await pool.query(
+      `SELECT o.*, w.user_id, w.master_id, w.service_id, w.status AS entry_status,
+              s.name AS service_name, s.duration_minutes, m.name AS master_name
+       FROM waitlist_offer o
+       JOIN waitlist w ON w.id = o.waitlist_id
+       JOIN services s ON s.id = w.service_id
+       JOIN masters m ON m.id = w.master_id
+       WHERE o.id=$1`,
+      [id]
+    );
+    return rows[0];
+  },
+
+  async markWaitlistOfferStatus(id, status) {
+    const { rows } = await pool.query(
+      `UPDATE waitlist_offer SET status=$2, responded_at=NOW() WHERE id=$1 RETURNING *`,
+      [id, status]
+    );
+    return rows[0];
+  },
+
+  // "Waited until the end of the day" as a query: anything still unanswered
+  // that was sent before today. Returns them so the caller can move the
+  // window on to the next person in line.
+  async expireStaleWaitlistOffers() {
+    const { rows } = await pool.query(
+      `UPDATE waitlist_offer SET status='expired', responded_at=NOW()
+       WHERE status='sent' AND sent_at < date_trunc('day', NOW())
+       RETURNING *`
     );
     return rows;
+  },
+
+  // Master/date pairs with somebody still waiting, for the sweep that looks
+  // for room to offer. Past dates are not swept: a freed slot yesterday helps
+  // nobody.
+  async getWaitlistTargets() {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT w.master_id, to_char(w.desired_date, 'YYYY-MM-DD') AS date
+       FROM waitlist w
+       WHERE w.status='waiting' AND w.desired_date >= CURRENT_DATE
+       ORDER BY 2, 1`
+    );
+    return rows;
+  },
+
+  // The panel's list: the queue with everything needed to show and act on a
+  // row — who, for what, and how the last offer to them ended.
+  async listWaitlist({ date = null, masterId = null, includeClosed = false } = {}) {
+    const { rows } = await pool.query(
+      `SELECT w.*, u.name AS user_name, s.name AS service_name, m.name AS master_name,
+              o.id AS offer_id, o.status AS offer_status, o.start_time AS offer_start,
+              o.end_time AS offer_end, o.sent_at AS offer_sent_at
+       FROM waitlist w
+       JOIN users u ON u.id = w.user_id
+       JOIN services s ON s.id = w.service_id
+       JOIN masters m ON m.id = w.master_id
+       LEFT JOIN LATERAL (
+         SELECT * FROM waitlist_offer o2
+         WHERE o2.waitlist_id = w.id ORDER BY o2.sent_at DESC LIMIT 1
+       ) o ON true
+       WHERE ($1::date IS NULL OR w.desired_date = $1)
+         AND ($2::int  IS NULL OR w.master_id = $2)
+         AND ($3::bool OR w.status = 'waiting')
+         AND ($1::date IS NOT NULL OR w.desired_date >= CURRENT_DATE)
+       ORDER BY w.desired_date, w.created_at`,
+      [date, masterId, includeClosed]
+    );
+    return rows;
+  },
+
+  async countWaiting() {
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM waitlist
+       WHERE status='waiting' AND desired_date >= CURRENT_DATE`
+    );
+    return rows[0].n;
   },
 
   // ── Reminders ─────────────────────────────────────────────────────────────
@@ -818,6 +945,63 @@ export const db = {
 
   async markReminderSent(apptId, column) {
     await pool.query(`UPDATE appointments SET ${column}=true WHERE id=$1`, [apptId]);
+  },
+
+  // ── Confirmation («придёте?») ─────────────────────────────────────────────
+  // Asked once, a few days out, and only for bookings far enough away that
+  // an answer still leaves time to hand the slot to someone else. A walk-in
+  // has no chat to ask in, so they are left out here rather than at the
+  // sending end, where a dropped message would still burn the flag.
+  async getAppointmentsNeedingConfirmRequest(fromMinutes, toMinutes) {
+    const { rows } = await pool.query(
+      `SELECT a.*, m.name AS master_name, s.name AS service_name, u.name AS user_name
+       FROM appointments a
+       JOIN masters m ON m.id=a.master_id
+       JOIN services s ON s.id=a.service_id
+       JOIN users u ON u.id=a.user_id
+       WHERE a.status='confirmed' AND a.confirm_request_sent=false
+         AND a.user_id NOT LIKE 'walkin:%'
+         AND (a.appointment_date + a.start_time)
+             BETWEEN NOW() + ($1 || ' minutes')::interval
+                 AND NOW() + ($2 || ' minutes')::interval`,
+      [fromMinutes, toMinutes]
+    );
+    return rows;
+  },
+
+  // Asked but never answered, and now close enough that the salon should
+  // ring them instead of waiting for a reply.
+  async getUnconfirmedAppointments(withinMinutes) {
+    const { rows } = await pool.query(
+      `SELECT a.*, m.name AS master_name, s.name AS service_name, u.name AS user_name
+       FROM appointments a
+       JOIN masters m ON m.id=a.master_id
+       JOIN services s ON s.id=a.service_id
+       JOIN users u ON u.id=a.user_id
+       WHERE a.status='confirmed' AND a.confirm_request_sent=true
+         AND a.confirmed_at IS NULL AND a.admin_alert_sent=false
+         AND (a.appointment_date + a.start_time)
+             BETWEEN NOW() AND NOW() + ($1 || ' minutes')::interval`,
+      [withinMinutes]
+    );
+    return rows;
+  },
+
+  async markConfirmRequestSent(apptId) {
+    await pool.query('UPDATE appointments SET confirm_request_sent=true WHERE id=$1', [apptId]);
+  },
+
+  async markAdminAlertSent(apptId) {
+    await pool.query('UPDATE appointments SET admin_alert_sent=true WHERE id=$1', [apptId]);
+  },
+
+  async markAppointmentConfirmed(apptId, userId) {
+    const { rows } = await pool.query(
+      `UPDATE appointments SET confirmed_at=NOW()
+       WHERE id=$1 AND user_id=$2 AND status='confirmed' RETURNING *`,
+      [apptId, userId]
+    );
+    return rows[0];
   },
 
   // ── Baileys auth state (see src/waAuth.js) ──────────────────────────────

@@ -121,6 +121,7 @@ export async function handleIncoming(phone, { text, profileName }) {
   if (replyId?.startsWith('slot:')) return booking.chooseSlot(phone, replyId.slice(5));
   if (replyId === 'confirm') return booking.confirm(phone);
   if (replyId === 'cancel') return booking.cancelFlow(phone);
+  if (replyId?.startsWith('appt_confirm:')) return booking.confirmAttendance(phone, replyId.split(':')[1]);
   if (replyId?.startsWith('cancel_appt:')) return booking.startCancelAppt(phone, replyId.split(':')[1]);
   if (replyId?.startsWith('confirm_cancel:')) return booking.confirmCancelAppt(phone, replyId.split(':')[1]);
   if (replyId === 'waitlist_join') return waitlist.handleJoin(phone);

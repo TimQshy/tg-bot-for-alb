@@ -299,6 +299,21 @@ export async function showMyBookings(phone) {
   return sendMenu(phone, 'Действия (ответьте цифрой):', items);
 }
 
+// Answer to the "придёте?" message the scheduler sends a few days out. Only
+// records the answer — the appointment was already confirmed, what changes
+// is that the salon now knows it is alive and need not ring them.
+export async function confirmAttendance(phone, apptIdStr) {
+  const apptId = parseInt(apptIdStr, 10);
+  const appt = await db.markAppointmentConfirmed(apptId, phone);
+  if (!appt) return sendText(phone, 'Запись не найдена или уже отменена.');
+
+  return sendText(
+    phone,
+    `Спасибо, ждём вас ${formatDateFull(String(appt.appointment_date).slice(0, 10))} ` +
+      `в ${String(appt.start_time).slice(0, 5)}. 🙌`
+  );
+}
+
 export async function startCancelAppt(phone, apptIdStr) {
   const apptId = parseInt(apptIdStr, 10);
   const appt = await db.getAppointmentById(apptId);
