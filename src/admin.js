@@ -7,7 +7,7 @@ import {
   SETTING_KEYS, HORIZON_KEY, HORIZON_MIN, HORIZON_MAX, getBookingHorizonDays,
 } from './salonInfo.js';
 import { sendText, getWaStatus } from './whatsapp.js';
-import { formatDateFull, getDayOfWeek, splitText, newWalkInId, todayStr } from './utils.js';
+import { addDays, formatDateFull, getDayOfWeek, splitText, newWalkInId, todayStr, toMinutes } from './utils.js';
 import {
   DEFAULT_STEP_MIN, findConflicts, getDaySchedule, getFreeSlots, previewSlots, serviceSlotOpts,
   validateIntervals,
@@ -638,6 +638,44 @@ adminRouter.delete('/api/schedule/override', async (req, res) => {
   const { masterId, date } = req.query;
   if (!masterId || !date) return res.status(400).json({ error: 'missing_fields' });
   await db.deleteOverride(parseInt(masterId, 10), date);
+  res.json({ ok: true });
+});
+
+// ── Закрытые часы салона ───────────────────────────────────────────────────
+// Поверх графиков всех мастеров: график не меняется, время просто перестаёт
+// быть видимым боту, консультанту и листу ожидания.
+adminRouter.get('/api/salon-blocks', async (req, res) => {
+  const from = req.query.from || todayStr();
+  const to = req.query.to || addDays(from, 365);
+  res.json(await db.listSalonBlocksRange(from, to));
+});
+
+adminRouter.post('/api/salon-blocks', async (req, res) => {
+  const { date, allDay, note } = req.body || {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return res.status(400).json({ error: 'bad_date' });
+
+  const startTime = allDay ? '00:00' : String(req.body?.startTime || '').slice(0, 5);
+  const endTime = allDay ? '24:00' : String(req.body?.endTime || '').slice(0, 5);
+  if (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime)) {
+    return res.status(400).json({ error: 'bad_time', message: 'Время в формате ЧЧ:ММ' });
+  }
+  if (toMinutes(endTime) <= toMinutes(startTime)) {
+    return res.status(400).json({ error: 'bad_range', message: 'Конец должен быть позже начала' });
+  }
+
+  const block = await db.createSalonBlock({
+    date, startTime, endTime, note: typeof note === 'string' ? note.trim().slice(0, 120) : null,
+  });
+  // Уже записанные клиенты остаются записанными — как и с графиком мастера,
+  // отменять за них панель не берётся, только показывает, кого задело.
+  res.json({ ...block, affected: await db.listAppointments({
+    dateFrom: date, dateTo: date, status: 'confirmed',
+  }).then(appts => appts.filter(a =>
+    toMinutes(a.start_time) < toMinutes(endTime) && toMinutes(a.end_time) > toMinutes(startTime))) });
+});
+
+adminRouter.delete('/api/salon-blocks/:id', async (req, res) => {
+  await db.deleteSalonBlock(parseInt(req.params.id, 10));
   res.json({ ok: true });
 });
 

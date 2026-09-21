@@ -75,6 +75,48 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
   return aStart < bEnd && aEnd > bStart;
 }
 
+// Hours the salon has closed for everyone go in as breaks on top of whatever
+// the master's own schedule says — a block never edits the schedule, it only
+// hides time from the bot. Pure: the callers hand it rows already read.
+export function applyBlocks(intervals, blocks = []) {
+  if (!blocks.length) return intervals;
+  const cuts = blocks.map(b => ({
+    start: toMinutes(b.start_time ?? b.start),
+    end: toMinutes(b.end_time ?? b.end),
+    note: (b.note || '').trim() || 'салон закрыт',
+  }));
+
+  return intervals.map(iv => {
+    const ivStart = toMinutes(iv.from);
+    const ivEnd = toMinutes(iv.to);
+    const extra = cuts
+      .filter(c => overlaps(ivStart, ivEnd, c.start, c.end))
+      .map(c => ({
+        from: toTimeString(Math.max(c.start, ivStart)),
+        to: toTimeString(Math.min(c.end, ivEnd)),
+        note: c.note,
+      }));
+    return extra.length ? { ...iv, breaks: [...(iv.breaks || []), ...extra] } : iv;
+  });
+}
+
+// Nothing left on the date at all: every working minute sits under a block.
+// Cheaper than asking for slots when the duration is not known yet.
+export function isFullyBlocked(intervals, blocks = []) {
+  if (!intervals.length) return false;
+  return applyBlocks(intervals, blocks).every(iv => {
+    const ivStart = toMinutes(iv.from);
+    const ivEnd = toMinutes(iv.to);
+    let open = ivStart;
+    for (const b of (iv.breaks || []).map(x => ({ start: toMinutes(x.from), end: toMinutes(x.to) }))
+      .sort((a, b2) => a.start - b2.start)) {
+      if (b.start > open) return false;
+      open = Math.max(open, b.end);
+    }
+    return open >= ivEnd;
+  });
+}
+
 // Pure: no database, no clock. The panel's editor previews unsaved intervals
 // through this same function, which is why it takes minStartMin rather than
 // working out "now" itself.
@@ -166,9 +208,12 @@ export async function getFreeSlots(masterId, dateStr, serviceDurationMin, opts =
   if (!day.isWorking || !day.intervals.length) return [];
 
   const leadMin = dateStr === todayStr() ? nowMinutes() + minLeadMin : 0;
-  const booked = await db.getBookedSlots(masterId, dateStr, excludeApptId);
+  const [booked, blocks] = await Promise.all([
+    db.getBookedSlots(masterId, dateStr, excludeApptId),
+    db.listSalonBlocks(dateStr),
+  ]);
   const slots = computeSlots({
-    intervals: day.intervals,
+    intervals: applyBlocks(day.intervals, blocks),
     durationMin: serviceDurationMin,
     stepMin,
     booked,
@@ -263,10 +308,16 @@ export async function findConflicts(masterId, dateStr, intervals) {
 export async function getAvailableDates(masterId, days = 14, { service = null, limit = Infinity } = {}) {
   const dates = [];
   const today = todayStr();
+  // One query for the whole horizon: a date-by-date lookup would be `days`
+  // round trips just to answer «закрыто ли».
+  const blocks = await db.listSalonBlocksRange(addDays(today, 1), addDays(today, days));
   for (let i = 1; i <= days && dates.length < limit; i++) {
     const date = addDays(today, i);
     const day = await getDaySchedule(masterId, date);
     if (!day.isWorking || !day.intervals.length) continue;
+    // A date the salon has closed is not on offer even without a service in
+    // hand — the check below only runs when there is one.
+    if (isFullyBlocked(day.intervals, blocks.filter(b => b.date === date))) continue;
     // With a service in hand the date has to actually hold it: a morning-only
     // colouring, or a day already taken by one, must not be offered and then
     // turn out to have nothing on it.

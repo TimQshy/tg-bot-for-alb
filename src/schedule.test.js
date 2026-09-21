@@ -10,7 +10,8 @@ import assert from 'node:assert/strict';
 
 import { db } from './database.js';
 import {
-  computeSlots, getDaySchedule, getFreeSlots, getFreeSlotsForService, validateIntervals,
+  applyBlocks, computeSlots, getAvailableDates, getDaySchedule, getFreeSlots,
+  getFreeSlotsForService, isFullyBlocked, validateIntervals,
 } from './schedule.js';
 
 const SATURDAY = '2026-09-19'; // a Saturday, weekday 5
@@ -237,4 +238,53 @@ test('длинная услуга не встаёт на день, где уже
   assert.deepEqual(await getFreeSlotsForService(long, masterId, NEXT_SATURDAY), []);
   // Обычная услуга в этот день по-прежнему записывается.
   assert.ok((await getFreeSlotsForService(service, masterId, NEXT_SATURDAY)).length > 0);
+});
+
+// ── Закрытые часы салона ───────────────────────────────────────────────────
+// Блок — поверх графика: сам график остаётся, время просто уходит из выдачи.
+test('закрытые часы салона убирают слоты, но не трогают график мастера', async (t) => {
+  await db.upsertOverride(masterId, NEXT_SATURDAY, 'custom', hours('12:00', '19:00'));
+  const block = await db.createSalonBlock({
+    date: NEXT_SATURDAY, startTime: '14:00', endTime: '16:00', note: 'уборка',
+  });
+  t.after(() => db.deleteSalonBlock(block.id));
+
+  const slots = await getFreeSlots(masterId, NEXT_SATURDAY, 60, { stepMin: 60 });
+  assert.deepEqual(starts(slots), ['12:00', '13:00', '16:00', '17:00', '18:00']);
+
+  // График мастера при этом нетронут — блок не исключение по дате.
+  const day = await getDaySchedule(masterId, NEXT_SATURDAY);
+  assert.deepEqual(day.intervals, [{ from: '12:00', to: '19:00', breaks: [] }]);
+
+  // И соседняя дата свободна.
+  assert.ok(starts(await getFreeSlots(masterId, SATURDAY, 60, { stepMin: 60 })).includes('14:00'));
+});
+
+test('блок на весь день закрывает дату целиком', async (t) => {
+  await db.upsertOverride(masterId, NEXT_SATURDAY, 'custom', hours('12:00', '19:00'));
+  const block = await db.createSalonBlock({
+    date: NEXT_SATURDAY, startTime: '00:00', endTime: '24:00', note: null,
+  });
+  t.after(() => db.deleteSalonBlock(block.id));
+
+  assert.deepEqual(await getFreeSlots(masterId, NEXT_SATURDAY, 60, { stepMin: 60 }), []);
+  assert.ok(!(await getAvailableDates(masterId, 21)).includes(NEXT_SATURDAY));
+});
+
+test('applyBlocks и isFullyBlocked считают без базы', () => {
+  const iv = hours('10:00', '18:00', [{ from: '13:00', to: '14:00', note: 'обед' }]);
+  const cut = applyBlocks(iv, [{ start_time: '09:00:00', end_time: '12:00:00', note: '' }]);
+  // Блок подрезан по краю интервала и не съел собственный перерыв мастера.
+  assert.deepEqual(cut[0].breaks, [
+    { from: '13:00', to: '14:00', note: 'обед' },
+    { from: '10:00', to: '12:00', note: 'салон закрыт' },
+  ]);
+
+  assert.equal(isFullyBlocked(iv, [{ start_time: '09:00', end_time: '17:00' }]), false);
+  assert.equal(isFullyBlocked(iv, [{ start_time: '09:00', end_time: '18:00' }]), true);
+  // Два блока встык закрывают день не хуже одного длинного.
+  assert.equal(isFullyBlocked(iv, [
+    { start_time: '10:00', end_time: '14:00' },
+    { start_time: '14:00', end_time: '18:00' },
+  ]), true);
 });

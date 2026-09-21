@@ -184,6 +184,7 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
 .row__sub{font-size:12.5px;color:var(--ink-3);margin-top:2px}
 .row__price{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:15px;font-weight:500;white-space:nowrap}
 .row__chev{width:18px;height:18px;color:var(--ink-3);fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+.preview{margin:6px 0 0;padding:12px;border-radius:var(--r-sm);background:var(--surface-2);white-space:pre-wrap;font:inherit;font-size:13.5px;color:var(--ink-2)}
 .section-label{font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin:22px 0 8px}
 .switch{--w:46px;--h:28px;flex:0 0 auto;width:var(--w);height:var(--h);border-radius:var(--r-pill);background:var(--line-strong);position:relative}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .18s}
@@ -451,37 +452,38 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <button class="btn btn--danger btn--block" id="mstDeleteBtn" style="margin-top:22px">Удалить мастера</button>
     </main>
 
-    <!-- ============= САЛОН: услуги и адрес ============= -->
+    <!-- ============= САЛОН: услуги и настройки ============= -->
+    <!-- Настройки салона живут строками-ссылками: сам экран остаётся коротким,
+         а длинные формы уезжают в шторки — как это давно устроено у услуг. -->
     <main class="col screen" id="screen-salon" hidden>
-      <div class="screen-head"><h1>Салон</h1><p id="uslugiSub"></p></div>
+      <div class="screen-head"><h1>Услуги</h1><p id="uslugiSub"></p></div>
       <div class="card" id="servicesCard"></div>
       <button class="btn btn--primary btn--block" id="addServiceBtn" style="margin-top:14px">+ Добавить услугу</button>
 
-      <h2 class="subhead">Запись</h2>
-      <p class="hint" style="margin:-4px 0 10px">На сколько дней вперёд клиент может записаться сам</p>
-      <div class="card" style="padding:16px">
-        <label class="field"><span class="field__label">Открыто дней вперёд</span>
-          <input class="input" type="number" id="setHorizon" min="1" max="365" inputmode="numeric"></label>
-        <p class="hint">Бот показывает даты в пределах этого окна и листает их кнопкой «Ещё даты». Консультант дальше этого окна тоже не записывает. Вас это не ограничивает — из панели запись создаётся на любую дату.</p>
-        <button class="btn btn--primary btn--block" id="setHorizonSaveBtn" style="margin-top:14px">Сохранить</button>
-        <p class="hint" id="setHorizonMsg"></p>
+      <div class="screen-head" style="padding-top:26px"><h1>Настройки салона</h1><p>Нажмите строку, чтобы открыть</p></div>
+      <div class="card">
+        <button class="row" id="rowAddress">
+          <span class="row__main">
+            <span class="row__title">Адрес</span>
+            <span class="row__sub" id="rowAddressSub"></span>
+          </span>
+          <svg class="row__chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <button class="row" id="rowBlocks">
+          <span class="row__main">
+            <span class="row__title">Закрытые часы</span>
+            <span class="row__sub" id="rowBlocksSub"></span>
+          </span>
+          <svg class="row__chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <button class="row" id="rowHorizon">
+          <span class="row__main">
+            <span class="row__title">Окно записи</span>
+            <span class="row__sub" id="rowHorizonSub"></span>
+          </span>
+          <svg class="row__chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
       </div>
-
-      <h2 class="subhead">Адрес</h2>
-      <p class="hint" style="margin:-4px 0 10px">Это отправляется клиенту сразу после подтверждения записи</p>
-      <div class="card" style="padding:16px">
-        <label class="field"><span class="field__label">Адрес</span>
-          <input class="input" id="setAddress" placeholder="г. Бишкек, ул. Киевская 95, 2 этаж"></label>
-        <label class="field"><span class="field__label">Как найти</span>
-          <input class="input" id="setAddressNote" placeholder="вход со двора, домофон 12, ориентир — аптека"></label>
-        <label class="field"><span class="field__label">Ссылка на карту</span>
-          <input class="input" id="setMapUrl" placeholder="https://go.2gis.com/..."></label>
-        <p class="hint">Пусто — бот просто не будет писать адрес. Заполните — он уйдёт отдельным сообщением после каждой записи: и через бота, и через консультанта, и когда запись создаёте вы сами.</p>
-        <button class="btn btn--primary btn--block" id="setSaveBtn" style="margin-top:14px">Сохранить</button>
-        <p class="hint" id="setMsg"></p>
-      </div>
-      <h2 class="subhead">Как это увидит клиент</h2>
-      <div class="card" style="padding:16px"><pre id="setPreview" style="margin:0;white-space:pre-wrap;font:inherit"></pre></div>
     </main>
 
     <!-- ================= WHATSAPP ================= -->
@@ -723,6 +725,74 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
   </div>
 </div>
 
+<div class="sheet" id="sheet-address" hidden role="dialog" aria-modal="true" aria-labelledby="addrTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="addrTitle">Адрес</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body">
+    <p class="hint" style="margin-top:0">Это отправляется клиенту сразу после подтверждения записи</p>
+    <label class="field"><span class="field__label">Адрес</span>
+      <input class="input" id="setAddress" placeholder="г. Бишкек, ул. Киевская 95, 2 этаж"></label>
+    <label class="field"><span class="field__label">Как найти</span>
+      <input class="input" id="setAddressNote" placeholder="вход со двора, домофон 12, ориентир — аптека"></label>
+    <label class="field"><span class="field__label">Ссылка на карту</span>
+      <input class="input" id="setMapUrl" placeholder="https://go.2gis.com/..."></label>
+    <p class="hint">Пусто — бот просто не будет писать адрес. Заполните — он уйдёт отдельным сообщением после каждой записи: и через бота, и через консультанта, и когда запись создаёте вы сами.</p>
+    <span class="field__label">Как это увидит клиент</span>
+    <pre id="setPreview" class="preview"></pre>
+    <p class="hint" id="setMsg"></p>
+  </div>
+  <div class="sheet__foot">
+    <button class="btn btn--ghost" data-close>Отмена</button>
+    <button class="btn btn--primary" id="setSaveBtn">Сохранить</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-blocks" hidden role="dialog" aria-modal="true" aria-labelledby="blkTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="blkTitle">Закрытые часы</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body">
+    <p class="hint" style="margin-top:0">Время, которого бот, консультант и лист ожидания не видят — поверх графиков всех мастеров. Сами графики не меняются.</p>
+    <div class="card" id="blkList" style="margin-bottom:14px"></div>
+    <label class="field"><span class="field__label">Дата</span>
+      <input class="input" type="date" id="blkDate"></label>
+    <label style="display:flex;align-items:center;gap:8px;margin:0 0 14px">
+      <button class="switch" role="switch" id="blkAllDay" aria-checked="false"></button>
+      <span class="field__label" style="margin:0">Весь день</span>
+    </label>
+    <div class="grid2" id="blkTimes">
+      <label class="field"><span class="field__label">С</span><input class="input" type="time" id="blkFrom"></label>
+      <label class="field"><span class="field__label">До</span><input class="input" type="time" id="blkTill"></label>
+    </div>
+    <label class="field"><span class="field__label">Заметка</span>
+      <input class="input" id="blkNote" placeholder="уборка, обучение, санитарный день"></label>
+    <p class="hint">Уже созданные записи остаются: панель покажет, кого задело, но сама никого не отменяет.</p>
+    <p class="hint" id="blkMsg"></p>
+  </div>
+  <div class="sheet__foot">
+    <button class="btn btn--ghost" data-close>Закрыть</button>
+    <button class="btn btn--primary" id="blkAddBtn">Закрыть часы</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-horizon" hidden role="dialog" aria-modal="true" aria-labelledby="horizonTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="horizonTitle">Окно записи</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body">
+    <p class="hint" style="margin-top:0">На сколько дней вперёд клиент может записаться сам</p>
+    <label class="field"><span class="field__label">Открыто дней вперёд</span>
+      <input class="input" type="number" id="setHorizon" min="1" max="365" inputmode="numeric"></label>
+    <p class="hint">Бот показывает даты в пределах этого окна и листает их кнопкой «Ещё даты». Консультант дальше этого окна тоже не записывает. Вас это не ограничивает — из панели запись создаётся на любую дату.</p>
+    <p class="hint" id="setHorizonMsg"></p>
+  </div>
+  <div class="sheet__foot">
+    <button class="btn btn--ghost" data-close>Отмена</button>
+    <button class="btn btn--primary" id="setHorizonSaveBtn">Сохранить</button>
+  </div>
+</div>
+
 <div class="sheet" id="sheet-day" hidden role="dialog" aria-modal="true" aria-labelledby="dayTitle">
   <div class="sheet__grab"></div>
   <div class="sheet__head"><h2 class="sheet__title" id="dayTitle">График</h2>
@@ -941,6 +1011,8 @@ const state = {
   newAppt: { serviceId: null, masterId: null, slot: null, masters: [] },
   move: { apptId: null, masterId: null, durationMin: null, slot: null },
   svc: { id: null, masterIds: [] },
+  settings: {},
+  blocks: [],
   master: { id: null },
 };
 
@@ -980,8 +1052,19 @@ function renderSettingsPreview() {
     ? ['📍 Адрес: ' + address, note, map].filter(Boolean).join('\n')
     : 'Адрес не заполнен — после записи бот ничего не отправит.';
 }
-async function loadSettings() {
-  const s = await api('/api/settings');
+// The rows on the salon screen show what is inside without opening it, so
+// the settings are readable at a glance.
+function renderSettingsRows() {
+  const days = state.settings.booking_horizon_days ?? 60;
+  document.getElementById('rowAddressSub').textContent =
+    state.settings.address || 'не заполнен';
+  document.getElementById('rowHorizonSub').textContent =
+    `${days} ${plural(days, 'день', 'дня', 'дней')} вперёд`;
+}
+// Both sheets edit a copy: «Отмена» must leave the saved settings alone, so
+// the fields are refilled from state every time the sheet opens.
+function fillSettingsFields() {
+  const s = state.settings;
   document.getElementById('setHorizon').value = s.booking_horizon_days ?? 60;
   document.getElementById('setHorizonMsg').textContent = '';
   document.getElementById('setAddress').value = s.address || '';
@@ -990,17 +1073,123 @@ async function loadSettings() {
   document.getElementById('setMsg').textContent = '';
   renderSettingsPreview();
 }
+async function loadSettings() {
+  state.settings = await api('/api/settings');
+  fillSettingsFields();
+  renderSettingsRows();
+  await loadBlocks();
+}
+document.getElementById('rowAddress').addEventListener('click', () => {
+  fillSettingsFields();
+  openSheet('sheet-address');
+});
+document.getElementById('rowHorizon').addEventListener('click', () => {
+  fillSettingsFields();
+  openSheet('sheet-horizon');
+});
+
+// ── Закрытые часы салона ───────────────────────────────────────────────
+// Блок не трогает график мастера: он только прячет время от бота,
+// консультанта и листа ожидания. Поэтому живёт в настройках салона, а не в
+// календаре мастера.
+function fmtBlockRange(b) {
+  const from = fmtTime(b.start_time), till = fmtTime(b.end_time);
+  return from === '00:00' && till === '24:00' ? 'весь день' : `${from}–${till}`;
+}
+function renderBlocksRow() {
+  const n = state.blocks.length;
+  document.getElementById('rowBlocksSub').textContent = n
+    ? `${n} ${plural(n, 'период', 'периода', 'периодов')}, ближайший — ${fmtDayShort(state.blocks[0].date)}`
+    : 'ничего не закрыто';
+}
+function renderBlocksList() {
+  const list = document.getElementById('blkList');
+  if (!state.blocks.length) {
+    list.innerHTML = '<div class="row"><span class="row__main"><span class="row__sub">Закрытых часов нет</span></span></div>';
+    return;
+  }
+  list.innerHTML = state.blocks.map(b => `
+    <div class="row">
+      <span class="row__main">
+        <span class="row__title">${fmtDayShort(b.date)} · ${fmtBlockRange(b)}</span>
+        ${b.note ? `<span class="row__sub">${escapeHtml(b.note)}</span>` : ''}
+      </span>
+      <button class="btn btn--ghost" data-del-block="${b.id}" style="min-height:34px;padding:0 12px">Открыть</button>
+    </div>`).join('');
+  list.querySelectorAll('[data-del-block]').forEach(b => b.addEventListener('click', async () => {
+    await api('/api/salon-blocks/' + b.dataset.delBlock, { method: 'DELETE' });
+    await loadBlocks();
+    toast('Часы открыты');
+  }));
+}
+async function loadBlocks() {
+  // Прошедшие даты не показываем: закрывать вчерашний день уже нечем.
+  state.blocks = await api('/api/salon-blocks?from=' + todayISO());
+  renderBlocksRow();
+  renderBlocksList();
+}
+function syncBlockAllDay() {
+  const all = document.getElementById('blkAllDay').getAttribute('aria-checked') === 'true';
+  document.getElementById('blkTimes').hidden = all;
+}
+document.getElementById('blkAllDay').addEventListener('click', function () {
+  this.setAttribute('aria-checked', String(this.getAttribute('aria-checked') !== 'true'));
+  syncBlockAllDay();
+});
+document.getElementById('rowBlocks').addEventListener('click', async () => {
+  document.getElementById('blkDate').value = state.date || todayISO();
+  document.getElementById('blkAllDay').setAttribute('aria-checked', 'false');
+  document.getElementById('blkFrom').value = '';
+  document.getElementById('blkTill').value = '';
+  document.getElementById('blkNote').value = '';
+  document.getElementById('blkMsg').textContent = '';
+  syncBlockAllDay();
+  openSheet('sheet-blocks');
+  await loadBlocks();
+});
+document.getElementById('blkAddBtn').addEventListener('click', async () => {
+  const msg = document.getElementById('blkMsg');
+  const date = document.getElementById('blkDate').value;
+  const allDay = document.getElementById('blkAllDay').getAttribute('aria-checked') === 'true';
+  const startTime = document.getElementById('blkFrom').value;
+  const endTime = document.getElementById('blkTill').value;
+
+  if (!date) { msg.textContent = 'Выберите дату'; return; }
+  if (!allDay && (!startTime || !endTime)) { msg.textContent = 'Укажите, с какого и до какого часа'; return; }
+
+  try {
+    const block = await api('/api/salon-blocks', { method: 'POST', body: JSON.stringify({
+      date, allDay, startTime, endTime, note: document.getElementById('blkNote').value.trim(),
+    }) });
+    document.getElementById('blkNote').value = '';
+    await loadBlocks();
+    // Записи в закрытые часы не отменяются сами — салон должен увидеть, с кем
+    // ему теперь разбираться.
+    const hit = block.affected?.length || 0;
+    msg.textContent = hit
+      ? `Часы закрыты. В них уже ${hit} ${plural(hit, 'запись', 'записи', 'записей')} — их придётся перенести вручную.`
+      : '';
+    toast('Часы закрыты');
+    if (!document.getElementById('screen-zapisi').hidden) loadAppointments();
+  } catch (e) {
+    msg.textContent = e?.message || 'Не получилось закрыть';
+  }
+});
 ['setAddress', 'setAddressNote', 'setMapUrl'].forEach(id =>
   document.getElementById(id).addEventListener('input', renderSettingsPreview));
 document.getElementById('setSaveBtn').addEventListener('click', async () => {
   const msg = document.getElementById('setMsg');
   try {
-    await api('/api/settings', { method: 'PUT', body: JSON.stringify({
+    const patch = {
       address: document.getElementById('setAddress').value.trim(),
       address_note: document.getElementById('setAddressNote').value.trim(),
       map_url: document.getElementById('setMapUrl').value.trim(),
-    }) });
+    };
+    await api('/api/settings', { method: 'PUT', body: JSON.stringify(patch) });
+    Object.assign(state.settings, patch);
+    renderSettingsRows();
     msg.textContent = '';
+    closeSheet();
     toast('Сохранено');
   } catch { msg.textContent = 'Не получилось сохранить'; }
 });
@@ -1014,7 +1203,10 @@ document.getElementById('setHorizonSaveBtn').addEventListener('click', async () 
   }
   try {
     await api('/api/settings', { method: 'PUT', body: JSON.stringify({ booking_horizon_days: days }) });
+    state.settings.booking_horizon_days = days;
+    renderSettingsRows();
     msg.textContent = '';
+    closeSheet();
     toast('Сохранено');
   } catch { msg.textContent = 'Не получилось сохранить'; }
 });

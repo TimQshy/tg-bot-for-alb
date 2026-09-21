@@ -93,6 +93,23 @@ CREATE TABLE IF NOT EXISTS schedule_override (
 
 CREATE INDEX IF NOT EXISTS idx_override_master_date ON schedule_override(master_id, date);
 
+-- Часы, закрытые салоном целиком: поверх графиков всех мастеров, на одну дату.
+-- Это не выходной мастера и не перерыв в его графике — графики остаются как
+-- были, а бот, консультант и лист ожидания просто не видят это время. Весь
+-- день — это 00:00–24:00 (Postgres TIME допускает 24:00:00), отдельного флага
+-- нет. Блоков на дату может быть сколько угодно.
+CREATE TABLE IF NOT EXISTS salon_block (
+  id SERIAL PRIMARY KEY,
+  date DATE NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  note TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CHECK (end_time > start_time)
+);
+
+CREATE INDEX IF NOT EXISTS idx_salon_block_date ON salon_block(date);
+
 -- How often a booking may start, as opposed to how long it runs: a 20-minute
 -- haircut on a 30-minute step wastes 10 minutes of every gap.
 ALTER TABLE services ADD COLUMN IF NOT EXISTS slot_step_minutes INTEGER NOT NULL DEFAULT 30;
@@ -736,6 +753,41 @@ export const db = {
       'DELETE FROM schedule_override WHERE master_id=$1 AND date=$2',
       [masterId, date]
     );
+    return rowCount > 0;
+  },
+
+  // ── Salon-wide blocked hours ─────────────────────────────────────────────
+  async listSalonBlocks(date) {
+    const { rows } = await pool.query(
+      'SELECT * FROM salon_block WHERE date=$1 ORDER BY start_time',
+      [date]
+    );
+    return rows;
+  },
+
+  // For the panel's list and for getAvailableDates(), which needs the whole
+  // horizon at once rather than a query per date.
+  async listSalonBlocksRange(from, to) {
+    const { rows } = await pool.query(
+      `SELECT * FROM salon_block
+       WHERE date >= $1 AND date <= $2
+       ORDER BY date, start_time`,
+      [from, to]
+    );
+    return rows;
+  },
+
+  async createSalonBlock({ date, startTime, endTime, note }) {
+    const { rows } = await pool.query(
+      `INSERT INTO salon_block (date, start_time, end_time, note)
+       VALUES ($1,$2,$3,$4) RETURNING *`,
+      [date, startTime, endTime, note || null]
+    );
+    return rows[0];
+  },
+
+  async deleteSalonBlock(id) {
+    const { rowCount } = await pool.query('DELETE FROM salon_block WHERE id=$1', [id]);
     return rowCount > 0;
   },
 
