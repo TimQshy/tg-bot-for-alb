@@ -790,6 +790,17 @@ export const db = {
     return rows[0];
   },
 
+  // The queue position (created_at) is deliberately left alone — the salon is
+  // fixing what the person waits for, not when they asked.
+  async updateWaitlistEntry(id, { serviceId, masterId, date }) {
+    const { rows } = await pool.query(
+      `UPDATE waitlist SET service_id=$2, master_id=$3, desired_date=$4
+       WHERE id=$1 RETURNING *`,
+      [id, serviceId, masterId, date]
+    );
+    return rows[0];
+  },
+
   async markWaitlistStatus(id, status) {
     const { rows } = await pool.query(
       `UPDATE waitlist SET status=$2 WHERE id=$1 RETURNING *`,
@@ -824,6 +835,10 @@ export const db = {
        FROM waitlist w
        JOIN services s ON s.id = w.service_id
        WHERE w.master_id=$1 AND w.desired_date=$2 AND w.status='waiting'
+         -- A walk-in has no chat to be offered anything in; they hold no
+         -- turn, or the whole date would stall behind someone the bot
+         -- cannot reach.
+         AND w.user_id NOT LIKE 'walkin:%'
          AND NOT EXISTS (
            SELECT 1 FROM waitlist_offer o
            WHERE o.waitlist_id = w.id AND o.desired_date=$2

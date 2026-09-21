@@ -7,7 +7,7 @@ import {
   SETTING_KEYS, HORIZON_KEY, HORIZON_MIN, HORIZON_MAX, getBookingHorizonDays,
 } from './salonInfo.js';
 import { sendText, getWaStatus } from './whatsapp.js';
-import { formatDateFull, getDayOfWeek, splitText, newWalkInId } from './utils.js';
+import { formatDateFull, getDayOfWeek, splitText, newWalkInId, todayStr } from './utils.js';
 import {
   DEFAULT_STEP_MIN, findConflicts, getDaySchedule, getFreeSlots, previewSlots, serviceSlotOpts,
   validateIntervals,
@@ -99,6 +99,68 @@ adminRouter.get('/api/waitlist', async (req, res) => {
     includeClosed: includeClosed === '1',
   });
   res.json(rows);
+});
+
+// Put someone in the queue by hand — walk-in at the counter, a call, a
+// regular the salon wants on the list. Same rule about the phone as a
+// manually created appointment: without a number the client gets a `walkin:`
+// id and the name stops being optional. Such a row is a reminder to ring
+// them, never someone the bot will write to.
+adminRouter.post('/api/waitlist', async (req, res) => {
+  const { phone, name, serviceId, masterId, date } = req.body || {};
+  const cleanPhone = String(phone || '').replace(/\D/g, '');
+  const cleanName = String(name || '').trim().slice(0, 120);
+
+  if (!serviceId || !masterId || !date) return res.status(400).json({ error: 'missing_fields' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad_date' });
+  if (date < todayStr()) return res.status(400).json({ error: 'past_date' });
+  if (!cleanPhone && !cleanName) return res.status(400).json({ error: 'name_required' });
+
+  const masters = await db.getMastersForService(serviceId);
+  if (!masters.some(m => m.id === Number(masterId))) {
+    return res.status(400).json({ error: 'master_not_assigned' });
+  }
+
+  const userId = cleanPhone || newWalkInId();
+  await db.upsertUser({ id: userId, name: cleanName || cleanPhone });
+
+  const result = await waitlist.join({ userId, masterId: Number(masterId), serviceId: Number(serviceId), date });
+  if (result.reason === 'disabled') return res.status(409).json({ error: 'waitlist_disabled' });
+  if (result.reason === 'already_waiting') return res.status(409).json({ error: 'already_waiting' });
+
+  res.json(result.entry);
+});
+
+// Editing a row is editing what they are waiting for — service, master,
+// date, and the name the salon files them under. The place in the queue is
+// not touched: `created_at` is what the FIFO runs on, and a typo in the date
+// should not cost somebody their turn.
+adminRouter.patch('/api/waitlist/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const entry = await db.getWaitlistEntry(id);
+  if (!entry) return res.status(404).json({ error: 'not_found' });
+
+  const { serviceId, masterId, date, name } = req.body || {};
+  const nextService = serviceId ? Number(serviceId) : entry.service_id;
+  const nextMaster = masterId ? Number(masterId) : entry.master_id;
+  const nextDate = date || String(entry.desired_date).slice(0, 10);
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return res.status(400).json({ error: 'bad_date' });
+  if (nextDate < todayStr()) return res.status(400).json({ error: 'past_date' });
+
+  const masters = await db.getMastersForService(nextService);
+  if (!masters.some(m => m.id === nextMaster)) {
+    return res.status(400).json({ error: 'master_not_assigned' });
+  }
+
+  if (typeof name === 'string' && name.trim()) {
+    await db.upsertUser({ id: entry.user_id, name: name.trim().slice(0, 120) });
+  }
+
+  const updated = await waitlist.updateEntry(id, {
+    serviceId: nextService, masterId: nextMaster, date: nextDate,
+  });
+  res.json(updated);
 });
 
 // Admin stepping in — they have the client on the phone and want the offer

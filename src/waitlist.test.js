@@ -45,6 +45,7 @@ mock.module('./database.js', {
       getNextWaitingFor: async (masterId, date, start, end) =>
         entries.find(e =>
           e.master_id === masterId && dateOf(e.desired_date) === date && e.status === 'waiting' &&
+          !String(e.user_id).startsWith('walkin:') &&
           !offers.some(o => o.waitlist_id === e.id && o.start_time === start && o.end_time === end)),
 
       createWaitlistOffer: async (waitlistId, { date, startTime, endTime }) => {
@@ -79,6 +80,11 @@ mock.module('./database.js', {
         return entry;
       },
 
+      updateWaitlistEntry: async (id, { serviceId, masterId, date }) => {
+        const entry = entries.find(e => e.id === id);
+        Object.assign(entry, { service_id: serviceId, master_id: masterId, desired_date: date });
+        return entry;
+      },
       expireStaleWaitlistOffers: async () => [],
       getWaitlistTargets: async () => [{ master_id: MASTER_ID, date: DATE }],
       isSlotAvailable: async () => !taken,
@@ -217,4 +223,27 @@ test('выключенный лист ожидания молчит', async () =
 
   mock.restoreAll();
   waitlist.clearWaitlistStateCache();
+});
+
+test('клиент без телефона очередь не держит — предложения идут мимо него', async () => {
+  seed();
+  entries[0].user_id = 'walkin:abc';
+
+  await offerNow();
+
+  assert.equal(menus.length, 1);
+  assert.equal(menus[0].to, '996700000002', 'окно ушло следующему, у кого есть чат');
+  assert.equal((await waitlist.offerEntryNow(1)).reason, 'no_contact');
+});
+
+test('перенос на другую дату закрывает живое предложение', async () => {
+  seed();
+  await offerNow();
+
+  const other = new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10);
+  await waitlist.updateEntry(1, { serviceId: SERVICE.id, masterId: MASTER_ID, date: other });
+
+  assert.equal(offers[0].status, 'expired');
+  assert.equal(dateOf(entries[0].desired_date), other);
+  assert.equal(entries[0].status, 'waiting', 'место в очереди не трогаем');
 });

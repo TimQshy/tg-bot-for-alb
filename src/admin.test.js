@@ -223,3 +223,59 @@ test('выключатель бота: PUT переключает, GET отда�
   // Back on, or every later run of the suite starts with a silent bot.
   assert.equal((await call('PUT', '/api/bot-state', { enabled: true })).body.enabled, true);
 });
+
+test('лист ожидания: запись руками, с телефоном и без', async () => {
+  const service = await db.createService({
+    name: 'Очередь-услуга', durationMinutes: 60, slotStepMinutes: 60, price: 100,
+  });
+  await db.setServiceMasters(service.id, [masterId]);
+  const date = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+
+  const withPhone = await call('POST', '/api/waitlist', {
+    phone: '996700000009', name: 'Айнура', serviceId: service.id, masterId, date,
+  });
+  assert.equal(withPhone.status, 200);
+  assert.equal(withPhone.body.user_id, '996700000009');
+
+  // Тот же клиент на ту же дату второй раз в очередь не встаёт.
+  const again = await call('POST', '/api/waitlist', {
+    phone: '996700000009', serviceId: service.id, masterId, date,
+  });
+  assert.equal(again.status, 409);
+  assert.equal(again.body.error, 'already_waiting');
+
+  const walkIn = await call('POST', '/api/waitlist', {
+    name: 'Без телефона', serviceId: service.id, masterId, date,
+  });
+  assert.equal(walkIn.status, 200);
+  assert.match(walkIn.body.user_id, /^walkin:/);
+
+  // Без телефона и без имени сохранять нечего.
+  const nameless = await call('POST', '/api/waitlist', { serviceId: service.id, masterId, date });
+  assert.equal(nameless.status, 400);
+  assert.equal(nameless.body.error, 'name_required');
+
+  const list = await call('GET', `/api/waitlist?date=${date}&masterId=${masterId}`);
+  assert.equal(list.body.length, 2);
+  assert.equal(list.body[0].service_name, 'Очередь-услуга');
+
+  // Правка даты не двигает очередь: порядок остаётся тем же.
+  const moved = new Date(Date.now() + 6 * 86400000).toISOString().slice(0, 10);
+  const patch = await call('PATCH', `/api/waitlist/${withPhone.body.id}`, { date: moved, name: 'Айнура К.' });
+  assert.equal(patch.status, 200);
+  assert.equal(String(patch.body.desired_date).slice(0, 10), moved);
+
+  const past = await call('PATCH', `/api/waitlist/${withPhone.body.id}`, { date: '2020-01-01' });
+  assert.equal(past.status, 400);
+  assert.equal(past.body.error, 'past_date');
+
+  // Снятие с очереди убирает строку из списка, но не из базы.
+  assert.equal((await call('DELETE', `/api/waitlist/${walkIn.body.id}`)).status, 200);
+  assert.equal((await call('GET', `/api/waitlist?date=${date}&masterId=${masterId}`)).body.length, 0);
+
+  // Предложить кому-то без телефона нечем.
+  const offer = await call('POST', `/api/waitlist/${walkIn.body.id}/offer`);
+  assert.equal(offer.status, 409);
+
+  await call('DELETE', `/api/waitlist/${withPhone.body.id}`);
+});

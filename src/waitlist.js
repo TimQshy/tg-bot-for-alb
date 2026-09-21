@@ -12,7 +12,7 @@ import { db } from './database.js';
 import { sendText } from './whatsapp.js';
 import { sendMenu } from './menu.js';
 import { getSession, clearSession } from './session.js';
-import { formatDateFull, todayStr, nowMinutes } from './utils.js';
+import { formatDateFull, todayStr, nowMinutes, isWalkIn } from './utils.js';
 import { getFreeSlotsForService } from './schedule.js';
 import { sendAddress, sendMainMenu } from './booking.js';
 
@@ -146,6 +146,10 @@ async function freeSlotsForWaiting(masterId, date) {
   const pairs = [];
   for (const entry of await db.listWaitlist({ date, masterId })) {
     if (entry.status !== 'waiting') continue;
+    // A walk-in the salon typed in by hand has no chat to offer anything in.
+    // Sending would mark an offer nobody can answer and block the date until
+    // the end of the day; they are a row to ring, and the panel says so.
+    if (isWalkIn(entry.user_id)) continue;
     const service = await db.getService(entry.service_id);
     if (!service) continue;
     const free = await getFreeSlotsForService(service, masterId, date);
@@ -265,6 +269,7 @@ export async function runWaitlistSweep() {
 export async function offerEntryNow(entryId) {
   const entry = await db.getWaitlistEntry(entryId);
   if (!entry || entry.status !== 'waiting') return { ok: false, reason: 'not_waiting' };
+  if (isWalkIn(entry.user_id)) return { ok: false, reason: 'no_contact' };
 
   const live = await db.getLiveOffer(entry.master_id, dateOf(entry.desired_date));
   if (live) return { ok: false, reason: 'offer_pending', offer: live };
@@ -276,6 +281,22 @@ export async function offerEntryNow(entryId) {
 
   const offer = await sendOffer(entry, date, free[0]);
   return { ok: true, offer };
+}
+
+// Changing what someone is waiting for. A live offer names a window on the
+// old date and the old master, so it is closed rather than left pointing at
+// something the entry no longer asks for.
+export async function updateEntry(entryId, { serviceId, masterId, date }) {
+  const entry = await db.getWaitlistEntry(entryId);
+  if (!entry) return null;
+
+  const moved = masterId !== entry.master_id || date !== dateOf(entry.desired_date);
+  if (moved) {
+    const live = await db.getLiveOffer(entry.master_id, dateOf(entry.desired_date));
+    if (live && live.waitlist_id === entry.id) await db.markWaitlistOfferStatus(live.id, 'expired');
+  }
+
+  return db.updateWaitlistEntry(entryId, { serviceId, masterId, date });
 }
 
 export async function removeEntry(entryId) {

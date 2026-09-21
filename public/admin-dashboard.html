@@ -386,7 +386,8 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
         <div id="waitlistList"></div>
         <div class="empty" id="waitlistEmpty" hidden>
           <h3>В очереди никого нет</h3>
-          <p>Сюда попадают клиенты, которым не хватило времени на занятую дату.</p>
+          <p>Сюда попадают клиенты, которым не хватило времени на занятую дату. Можно добавить вручную.</p>
+          <button class="btn btn--primary" id="waitlistAddBtn">В лист ожидания</button>
         </div>
       </div>
     </main>
@@ -619,6 +620,33 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
   <div class="sheet__foot">
     <button class="btn btn--ghost" data-close>Отмена</button>
     <button class="btn btn--primary" id="newSubmitBtn" disabled>Записать</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-wl" hidden role="dialog" aria-modal="true" aria-labelledby="wlTitle">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head"><h2 class="sheet__title" id="wlTitle">В лист ожидания</h2>
+    <button class="iconbtn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet__body">
+    <label class="field" id="wlPhoneField"><span class="field__label">Телефон клиента</span>
+      <input class="input" id="wlPhone" placeholder="996700000000" inputmode="tel"></label>
+    <label class="field"><span class="field__label">Имя клиента</span>
+      <input class="input" id="wlName" placeholder="Имя"></label>
+    <p class="hint">Телефон можно не заполнять — тогда укажите имя. Клиенту без телефона бот не напишет: освободится время — звоните сами, карточка будет в очереди с пометкой.</p>
+
+    <span class="field__label">Услуга</span>
+    <div class="filters" id="wlServiceChips" style="padding:0;margin:0 0 6px"></div>
+
+    <span class="field__label">Мастер</span>
+    <div class="filters" id="wlMasterChips" style="padding:0;margin:0 0 6px"></div>
+
+    <label class="field"><span class="field__label">Дата, которую ждёт</span>
+      <input class="input" type="date" id="wlDate"></label>
+    <p class="hint" id="wlHint"></p>
+  </div>
+  <div class="sheet__foot">
+    <button class="btn btn--ghost" data-close>Отмена</button>
+    <button class="btn btn--primary" id="wlSubmitBtn">В очередь</button>
   </div>
 </div>
 
@@ -901,6 +929,7 @@ const state = {
   appts: [],              // currently rendered day's appointments
   zapisiView: 'appts',    // 'appts' | 'waitlist'
   waitlist: [],           // the queue, as last loaded
+  wlForm: { id: null, serviceId: null, masterId: null },
   weekCounts: {},         // date -> count, for day-strip dots
   dayCache: {},           // "masterId|date" -> promise of /api/schedule/day
   hoursMasterId: null,
@@ -1723,7 +1752,8 @@ function setZapisiView(view) {
   document.getElementById('zapisiSub').textContent = isWaitlist
     ? 'Кто ждёт освободившееся время'
     : 'Проведите по датам, чтобы выбрать день';
-  document.getElementById('fabAdd').hidden = isWaitlist;
+  document.getElementById('fabAdd').setAttribute('aria-label',
+    isWaitlist ? 'В лист ожидания' : 'Новая запись');
   if (isWaitlist) {
     document.getElementById('emptyState').hidden = true;
     loadWaitlist();
@@ -1762,10 +1792,14 @@ function waitlistCardHtml(row, position) {
         <span class="wl__pos">${position}-й в очереди</span>
       </div>
       <p class="wl__svc">${escapeHtml(row.service_name)} · ${escapeHtml(row.master_name)}</p>
-      <div class="wl__meta">${waitlistStatus(row)}</div>
+      <div class="wl__meta">${waitlistStatus(row)}${canCall ? ''
+        : '<span class="status status--off"><i></i>без телефона — звоните сами</span>'}</div>
       <div class="wl__actions">
-        <button class="btn btn--soft" data-wl-offer="${row.id}">Предложить сейчас</button>
-        ${canCall ? `<a class="btn btn--soft" href="tel:+${row.user_id}">Позвонить</a>` : ''}
+        ${canCall
+          ? `<button class="btn btn--soft" data-wl-offer="${row.id}">Предложить</button>
+             <a class="btn btn--soft" href="tel:+${row.user_id}">Позвонить</a>`
+          : ''}
+        <button class="btn btn--soft" data-wl-edit="${row.id}">Изменить</button>
         <button class="btn btn--danger" data-wl-remove="${row.id}">Снять</button>
       </div>
     </article>`;
@@ -1811,7 +1845,111 @@ function renderWaitCount(n) {
   document.getElementById('waitCount').textContent = n ? ` · ${n}` : '';
 }
 
+// ── Шторка: в лист ожидания ────────────────────────────────────────────
+// One sheet for both adding and editing, the way the appointment sheets
+// work. Editing an existing row leaves the phone alone: the id of the user
+// row is built from it, and changing it would be a different client.
+function openWaitlistSheet(row) {
+  state.wlForm = {
+    id: row ? row.id : null,
+    serviceId: row ? row.service_id : null,
+    masterId: row ? row.master_id : null,
+  };
+  document.getElementById('wlTitle').textContent = row ? 'Изменить очередь' : 'В лист ожидания';
+  document.getElementById('wlSubmitBtn').textContent = row ? 'Сохранить' : 'В очередь';
+  document.getElementById('wlPhoneField').hidden = !!row;
+  document.getElementById('wlPhone').value = '';
+  document.getElementById('wlName').value = row ? (row.user_name || '') : '';
+  document.getElementById('wlDate').value = row ? String(row.desired_date).slice(0, 10) : state.date;
+  document.getElementById('wlHint').textContent = '';
+
+  renderWlServiceChips();
+  renderWlMasterChips(row ? row.master_id : null);
+  openSheet('sheet-wl');
+}
+
+function renderWlServiceChips() {
+  document.getElementById('wlServiceChips').innerHTML = state.services
+    .filter(s => s.is_active || s.id === state.wlForm.serviceId)
+    .map(s => `<button class="chip${s.id === state.wlForm.serviceId ? ' chip--on' : ''}" data-service-id="${s.id}">${escapeHtml(s.name)}</button>`)
+    .join('');
+}
+
+async function renderWlMasterChips(selectedId) {
+  const wrap = document.getElementById('wlMasterChips');
+  if (!state.wlForm.serviceId) {
+    wrap.innerHTML = '<span class="hint">сначала выберите услугу</span>';
+    return;
+  }
+  const masters = await api(`/api/services/${state.wlForm.serviceId}/masters`);
+  state.wlForm.masterId = masters.some(m => m.id === selectedId) ? selectedId : null;
+  wrap.innerHTML = masters.length
+    ? masters.map(m => `<button class="chip${m.id === state.wlForm.masterId ? ' chip--on' : ''}" data-master-id="${m.id}">${escapeHtml(m.name)}</button>`).join('')
+    : '<span class="hint">нет мастеров для этой услуги</span>';
+}
+
+document.getElementById('wlServiceChips').addEventListener('click', async e => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  state.wlForm.serviceId = Number(b.dataset.serviceId);
+  renderWlServiceChips();
+  await renderWlMasterChips(state.wlForm.masterId);
+});
+
+document.getElementById('wlMasterChips').addEventListener('click', e => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  state.wlForm.masterId = Number(b.dataset.masterId);
+  renderWlMasterChips(state.wlForm.masterId);
+});
+
+const WL_ERRORS = {
+  name_required: 'Без телефона нужно имя клиента',
+  master_not_assigned: 'Этот мастер не делает выбранную услугу',
+  already_waiting: 'Этот клиент уже стоит в очереди на эту дату',
+  waitlist_disabled: 'Лист ожидания выключен в разделе «Сис-админ»',
+  past_date: 'Дата уже прошла',
+  bad_date: 'Проверьте дату',
+};
+
+document.getElementById('wlSubmitBtn').addEventListener('click', async () => {
+  const hint = document.getElementById('wlHint');
+  const { id, serviceId, masterId } = state.wlForm;
+  const phone = document.getElementById('wlPhone').value.trim();
+  const name = document.getElementById('wlName').value.trim();
+  const date = document.getElementById('wlDate').value;
+
+  if (!serviceId || !masterId || !date) { hint.textContent = 'Выберите услугу, мастера и дату'; return; }
+  if (!id && !phone && !name) { hint.textContent = 'Заполните телефон или имя клиента'; return; }
+
+  try {
+    if (id) {
+      await api(`/api/waitlist/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ serviceId, masterId, date, name }),
+      });
+    } else {
+      await api('/api/waitlist', {
+        method: 'POST',
+        body: JSON.stringify({ phone, name, serviceId, masterId, date }),
+      });
+    }
+    closeSheet();
+    toast(id ? 'Сохранено' : 'Добавили в очередь');
+    loadWaitlist();
+  } catch (e) {
+    hint.textContent = WL_ERRORS[e.error] || 'Не получилось сохранить';
+  }
+});
+
 document.getElementById('waitlistList').addEventListener('click', async e => {
+  const editBtn = e.target.closest('[data-wl-edit]');
+  if (editBtn) {
+    const row = state.waitlist.find(r => String(r.id) === editBtn.dataset.wlEdit);
+    if (row) openWaitlistSheet(row);
+    return;
+  }
+
   const offerBtn = e.target.closest('[data-wl-offer]');
   if (offerBtn) {
     offerBtn.disabled = true;
@@ -1821,6 +1959,7 @@ document.getElementById('waitlistList').addEventListener('click', async e => {
     } catch (err) {
       toast(err.error === 'no_slots' ? 'На эту дату нет свободного времени'
         : err.error === 'offer_pending' ? 'На эту дату уже ждём ответа'
+        : err.error === 'no_contact' ? 'У клиента нет телефона — позвоните сами'
         : 'Не получилось отправить');
     }
     return loadWaitlist();
@@ -2012,7 +2151,11 @@ function apptCardHtml(a, isConflict = false) {
 }
 
 document.getElementById('emptyAddBtn').addEventListener('click', () => openNewSheet({ masterId: state.filterMasterId, date: state.date }));
-document.getElementById('fabAdd').addEventListener('click', () => openNewSheet({ masterId: state.filterMasterId, date: state.date }));
+document.getElementById('waitlistAddBtn').addEventListener('click', () => openWaitlistSheet(null));
+document.getElementById('fabAdd').addEventListener('click', () => {
+  if (state.zapisiView === 'waitlist') return openWaitlistSheet(null);
+  openNewSheet({ masterId: state.filterMasterId, date: state.date });
+});
 
 // ── Sheet: Новая запись ─────────────────────────────────────────────────
 async function openNewSheet({ masterId, date }) {
