@@ -85,8 +85,14 @@ python3 - "$SLUG" <<'PY'
 import sys
 slug = sys.argv[1]
 marker = '    # >>> salons >>>'
+# Upstream through a variable so nginx re-resolves it per request — see the
+# resolver comment in nginx/admin.conf. A variable name takes no hyphens, so
+# a slug like "beauty-bar" becomes $up_beauty_bar.
+var = 'up_' + slug.replace('-', '_')
 block = (f"    location /s/{slug}/ {{\n"
-         f"        proxy_pass http://salon-{slug}:3000/;\n"
+         f"        set ${var} salon-{slug}:3000;\n"
+         f"        rewrite ^/s/{slug}/(.*)$ /$1 break;\n"
+         f"        proxy_pass http://${var};\n"
          f"        proxy_set_header Host $host;\n"
          f"        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
          f"        proxy_set_header X-Forwarded-Proto $scheme;\n"
