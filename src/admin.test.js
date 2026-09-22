@@ -150,6 +150,31 @@ test('конфликт не блокирует сохранение', async () =
   });
 });
 
+test('шаг записи принимает своё значение и отбивает бессмысленное', async () => {
+  const created = await call('POST', '/api/services', {
+    name: 'Шаговая', duration_minutes: 90, slot_step_minutes: 45, price: 2000,
+  });
+  assert.equal(created.status, 200);
+  assert.equal(created.body.slot_step_minutes, 45);
+
+  const tooSmall = await call('POST', '/api/services', {
+    name: 'Мелкий шаг', duration_minutes: 60, slot_step_minutes: 1, price: 100,
+  });
+  assert.equal(tooSmall.status, 400);
+  assert.equal(tooSmall.body.error, 'bad_step');
+
+  const notInteger = await call('PUT', `/api/services/${created.body.id}`, {
+    name: 'Шаговая', duration_minutes: 90, slot_step_minutes: 22.5, price: 2000,
+  });
+  assert.equal(notInteger.status, 400);
+
+  const kept = await call('PUT', `/api/services/${created.body.id}`, {
+    name: 'Шаговая', duration_minutes: 90, slot_step_minutes: 45, price: 2000, is_active: false,
+  });
+  assert.equal(kept.body.slot_step_minutes, 45);
+  await call('DELETE', `/api/services/${created.body.id}`);
+});
+
 test('мастера создаются и отключаются', async () => {
   const created = await call('POST', '/api/masters', { name: 'Новый', description: 'брови' });
   assert.equal(created.status, 200);

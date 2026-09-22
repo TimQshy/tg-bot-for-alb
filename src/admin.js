@@ -327,6 +327,19 @@ adminRouter.get('/api/services', async (_req, res) => {
 
 // earliest_start/latest_start/blocks_day are the long-service rules: an empty
 // string from the form means "no limit", which is NULL in the column.
+// The step the panel offers as 15/30/60 can also be typed in by hand, so any
+// minute count arrives here. Bounded on both ends: a typo like 1 would turn a
+// working day into ~700 slots, and a step longer than a shift offers nothing.
+const STEP_MIN = 5;
+const STEP_MAX = 480;
+
+function slotStep(v) {
+  if (v == null || v === '') return { value: undefined };
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < STEP_MIN || n > STEP_MAX) return { bad: true };
+  return { value: n };
+}
+
 function startWindow(body) {
   const time = v => (typeof v === 'string' && /^\d{2}:\d{2}/.test(v) ? v.slice(0, 5) : null);
   return {
@@ -339,9 +352,11 @@ function startWindow(body) {
 adminRouter.post('/api/services', async (req, res) => {
   const { name, description, duration_minutes, slot_step_minutes, price } = req.body || {};
   if (!name || !duration_minutes || price == null) return res.status(400).json({ error: 'missing_fields' });
+  const step = slotStep(slot_step_minutes);
+  if (step.bad) return res.status(400).json({ error: 'bad_step' });
   res.json(await db.createService({
     name, description, durationMinutes: duration_minutes,
-    slotStepMinutes: slot_step_minutes, price,
+    slotStepMinutes: step.value, price,
     ...startWindow(req.body || {}),
   }));
 });
@@ -365,12 +380,14 @@ function inUseResponse(res, kind, usage) {
 adminRouter.put('/api/services/:id', async (req, res) => {
   const { name, description, duration_minutes, slot_step_minutes, price, is_active } = req.body || {};
   if (!name || !duration_minutes || price == null) return res.status(400).json({ error: 'missing_fields' });
+  const step = slotStep(slot_step_minutes);
+  if (step.bad) return res.status(400).json({ error: 'bad_step' });
   res.json(
     await db.updateService(req.params.id, {
       name,
       description,
       durationMinutes: duration_minutes,
-      slotStepMinutes: slot_step_minutes,
+      slotStepMinutes: step.value,
       price,
       isActive: is_active !== false,
       ...startWindow(req.body || {}),

@@ -642,8 +642,6 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
     <span class="field__label">Мастер</span>
     <div class="filters" id="wlMasterChips" style="padding:0;margin:0 0 6px"></div>
 
-    <label class="field"><span class="field__label">Дата, которую ждёт</span>
-      <input class="input" type="date" id="wlDate"></label>
     <p class="hint" id="wlHint"></p>
   </div>
   <div class="sheet__foot">
@@ -697,8 +695,10 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
         <option value="15">каждые 15 мин</option>
         <option value="30">каждые 30 мин</option>
         <option value="60">каждый час</option>
+        <option value="custom">своё значение…</option>
       </select>
-      <p class="hint">Как часто может начинаться запись. Не то же самое, что длительность.</p>
+      <input class="input" id="svcStepCustom" inputmode="numeric" placeholder="минут, например 45" style="margin-top:8px" hidden>
+      <p class="hint">Как часто может начинаться запись. Не то же самое, что длительность. Своё значение — от 5 до 480 минут.</p>
     </div>
     <div class="grid2">
       <label class="field"><span class="field__label">Начинать не раньше</span><input class="input" id="svcFrom" type="time"></label>
@@ -999,7 +999,7 @@ const state = {
   appts: [],              // currently rendered day's appointments
   zapisiView: 'appts',    // 'appts' | 'waitlist'
   waitlist: [],           // the queue, as last loaded
-  wlForm: { id: null, serviceId: null, masterId: null },
+  wlForm: { id: null, serviceId: null, masterId: null, date: null },
   weekCounts: {},         // date -> count, for day-strip dots
   dayCache: {},           // "masterId|date" -> promise of /api/schedule/day
   hoursMasterId: null,
@@ -2046,13 +2046,16 @@ function openWaitlistSheet(row) {
     id: row ? row.id : null,
     serviceId: row ? row.service_id : null,
     masterId: row ? row.master_id : null,
+    date: null,
   };
   document.getElementById('wlTitle').textContent = row ? 'Изменить очередь' : 'В лист ожидания';
   document.getElementById('wlSubmitBtn').textContent = row ? 'Сохранить' : 'В очередь';
   document.getElementById('wlPhoneField').hidden = !!row;
   document.getElementById('wlPhone').value = '';
   document.getElementById('wlName').value = row ? (row.user_name || '') : '';
-  document.getElementById('wlDate').value = row ? String(row.desired_date).slice(0, 10) : state.date;
+  // The date is not asked for: an entry added from the panel waits for the
+  // date the schedule is open on, and editing an entry keeps the one it has.
+  state.wlForm.date = row ? String(row.desired_date).slice(0, 10) : state.date;
   document.getElementById('wlHint').textContent = '';
 
   renderWlServiceChips();
@@ -2109,9 +2112,10 @@ document.getElementById('wlSubmitBtn').addEventListener('click', async () => {
   const { id, serviceId, masterId } = state.wlForm;
   const phone = document.getElementById('wlPhone').value.trim();
   const name = document.getElementById('wlName').value.trim();
-  const date = document.getElementById('wlDate').value;
+  const date = state.wlForm.date;
 
-  if (!serviceId || !masterId || !date) { hint.textContent = 'Выберите услугу, мастера и дату'; return; }
+  if (!serviceId || !masterId) { hint.textContent = 'Выберите услугу и мастера'; return; }
+  if (!date) { hint.textContent = 'Выберите дату в расписании'; return; }
   if (!id && !phone && !name) { hint.textContent = 'Заполните телефон или имя клиента'; return; }
 
   try {
@@ -2510,6 +2514,33 @@ async function loadServices() {
   document.getElementById('servicesCard').querySelectorAll('[data-edit-service]').forEach(b =>
     b.addEventListener('click', () => openServiceSheet(Number(b.dataset.editService))));
 }
+// The step is a preset list plus a free-form field: a value that isn't one of
+// the presets opens the field with that number in it, so editing a service
+// never silently rounds its step to a preset.
+const STEP_PRESETS = ['15', '30', '60'];
+
+function setStepField(minutes) {
+  const value = String(minutes);
+  const preset = STEP_PRESETS.includes(value);
+  document.getElementById('svcStep').value = preset ? value : 'custom';
+  const custom = document.getElementById('svcStepCustom');
+  custom.value = preset ? '' : value;
+  custom.hidden = preset;
+}
+
+// The number actually in force, whichever of the two controls holds it.
+function readStepField() {
+  const sel = document.getElementById('svcStep').value;
+  if (sel !== 'custom') return parseInt(sel, 10);
+  return parseInt(document.getElementById('svcStepCustom').value, 10);
+}
+
+document.getElementById('svcStep').addEventListener('change', function () {
+  const custom = document.getElementById('svcStepCustom');
+  custom.hidden = this.value !== 'custom';
+  if (!custom.hidden) custom.focus();
+});
+
 async function openServiceSheet(id) {
   document.getElementById('svcHint').textContent = '';
   if (id) {
@@ -2517,7 +2548,7 @@ async function openServiceSheet(id) {
     document.getElementById('svcTitle').textContent = 'Услуга';
     document.getElementById('svcName').value = s.name;
     document.getElementById('svcDur').value = s.duration_minutes;
-    document.getElementById('svcStep').value = String(s.slot_step_minutes || 30);
+    setStepField(s.slot_step_minutes || 30);
     document.getElementById('svcPrice').value = Math.round(Number(s.price));
     document.getElementById('svcActive').setAttribute('aria-checked', String(!!s.is_active));
     document.getElementById('svcFrom').value = (s.earliest_start || '').slice(0, 5);
@@ -2530,7 +2561,7 @@ async function openServiceSheet(id) {
     document.getElementById('svcTitle').textContent = 'Новая услуга';
     document.getElementById('svcName').value = '';
     document.getElementById('svcDur').value = '60';
-    document.getElementById('svcStep').value = '30';
+    setStepField(30);
     document.getElementById('svcPrice').value = '';
     document.getElementById('svcActive').setAttribute('aria-checked', 'true');
     document.getElementById('svcFrom').value = '';
@@ -2561,7 +2592,7 @@ document.getElementById('svcMasterChips').addEventListener('click', e => {
 document.getElementById('svcSubmitBtn').addEventListener('click', async () => {
   const name = document.getElementById('svcName').value.trim();
   const duration_minutes = parseInt(document.getElementById('svcDur').value, 10);
-  const slot_step_minutes = parseInt(document.getElementById('svcStep').value, 10);
+  const slot_step_minutes = readStepField();
   const price = parseFloat(document.getElementById('svcPrice').value);
   const is_active = document.getElementById('svcActive').getAttribute('aria-checked') === 'true';
   const earliest_start = document.getElementById('svcFrom').value || null;
@@ -2569,6 +2600,9 @@ document.getElementById('svcSubmitBtn').addEventListener('click', async () => {
   const blocks_day = document.getElementById('svcBlocksDay').getAttribute('aria-checked') === 'true';
   const hint = document.getElementById('svcHint');
   if (!name || !duration_minutes || !(price >= 0)) { hint.textContent = 'Заполните название, длительность и цену'; return; }
+  if (!(slot_step_minutes >= 5 && slot_step_minutes <= 480)) {
+    hint.textContent = 'Шаг записи — от 5 до 480 минут'; return;
+  }
   if (earliest_start && latest_start && latest_start < earliest_start) {
     hint.textContent = '«Не позже» должно быть после «не раньше»'; return;
   }
