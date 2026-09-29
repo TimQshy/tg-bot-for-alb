@@ -126,6 +126,10 @@ export async function connectWhatsApp(onIncoming, onHumanReply = async () => {})
       const statusCode = lastDisconnect?.error?.output?.statusCode;
 
       if (statusCode === DisconnectReason.loggedOut) {
+        // Why WhatsApp dropped us (device_removed, conflict, …) lives in the
+        // error's data/message, not the status code — keep it for diagnosis.
+        const err = lastDisconnect?.error;
+        console.error('WhatsApp: logout reason:', err?.message, JSON.stringify(err?.data ?? null));
         console.error('WhatsApp: device logged out, clearing session — rescan QR in the admin panel');
         await db.waAuthDelete('creds').catch(() => {});
         latestQrDataUrl = null;
