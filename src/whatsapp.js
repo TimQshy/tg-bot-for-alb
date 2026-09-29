@@ -2,15 +2,13 @@
 // protocol (Baileys), no Meta Business account/App Review needed. Session
 // lives in Postgres (see waAuth.js) so it survives redeploys; only needs a
 // fresh QR scan if the linked device is actually logged out.
-import {
-  makeWASocket, fetchLatestBaileysVersion, DisconnectReason, getContentType, normalizeMessageContent,
-} from '@whiskeysockets/baileys';
-import { randomBytes } from 'crypto';
+import { makeWASocket, fetchLatestBaileysVersion, DisconnectReason } from '@whiskeysockets/baileys';
 import P from 'pino';
 import QRCode from 'qrcode';
 import { db } from './database.js';
 import { useDbAuthState } from './waAuth.js';
 import { isWalkIn } from './utils.js';
+import { makeInboundFilter, rememberId, fromJid, rotateAdvSecret, withAdvSecret } from './waInbound.js';
 
 const logger = P({ level: process.env.WHATSAPP_LOG_LEVEL || 'silent' });
 
@@ -24,21 +22,8 @@ let connectionStatus = 'connecting'; // 'connecting' | 'open' | 'closed'
 // phone" apart from "we just sent this ourselves". Bounded: only the last
 // few hundred matter, an echo arrives within seconds of the send.
 const botSentIds = new Set();
-// Ids already handled from messages.upsert — WhatsApp redelivers a message
-// after a failed decrypt, and each copy must not get its own answer.
-const seenIncomingIds = new Set();
-const SENT_IDS_MAX = 500;
-const IGNORED_CONTENT = new Set(['protocolMessage', 'reactionMessage']);
-// A fromMe echo older than this is history replay, not a live reply.
-const HUMAN_ECHO_MAX_AGE_MS = 2 * 60 * 1000;
-
-function rememberId(set, id) {
-  set.add(id);
-  if (set.size > SENT_IDS_MAX) {
-    const oldest = set.values();
-    for (let i = 0; i < SENT_IDS_MAX / 5; i++) set.delete(oldest.next().value);
-  }
-}
+// Shared across reconnects: a redelivered copy can arrive on the new socket.
+const classifyInbound = makeInboundFilter({ botSentIds });
 
 function rememberSentId(id) {
   rememberId(botSentIds, id);
@@ -48,9 +33,6 @@ function toJid(phone) {
   return phone.includes('@') ? phone : `${phone}@s.whatsapp.net`;
 }
 
-function fromJid(jid) {
-  return jid.split('@')[0];
-}
 
 export function getWaStatus() {
   return { status: connectionStatus, qrDataUrl: connectionStatus === 'open' ? null : latestQrDataUrl };
@@ -93,23 +75,11 @@ export async function connectWhatsApp(onIncoming, onHumanReply = async () => {})
 
   sock.ev.on('creds.update', saveCreds);
 
-  // Since late July 2026 WhatsApp sends companion_reg_refresh mid-pairing to
-  // retire the adv secret advertised in the QR. Baileys rc14 only acks it,
-  // so the QR keeps the retired secret and the phone answers "can't link new
-  // devices right now" (Baileys issue #2737, unreleased fix in PR #2765).
-  // Workaround until a release ships it: rotate the secret ourselves and
-  // re-render the QR on screen with it. pair-success reads
-  // state.creds.advSecretKey at verification time, so mutating it is enough.
+  // WhatsApp retiring the QR's adv secret mid-pairing — see rotateAdvSecret.
   let lastQr = null;
-  const withCurrentAdvSecret = (qr) => {
-    // QR payload: ref,noiseKey,identityKey,advSecret,platformId
-    const parts = qr.split(',');
-    parts[parts.length - 2] = state.creds.advSecretKey;
-    return parts.join(',');
-  };
+  const withCurrentAdvSecret = (qr) => withAdvSecret(qr, state.creds.advSecretKey);
   sock.ws.on('CB:notification,type:companion_reg_refresh', async () => {
-    if (state.creds.me) return; // already paired — the secret verifies the session
-    state.creds.advSecretKey = randomBytes(32).toString('base64');
+    if (!rotateAdvSecret(state.creds)) return;
     await saveCreds();
     console.log('WhatsApp: companion_reg_refresh, rotated adv secret and re-rendered the QR');
     if (lastQr) latestQrDataUrl = await QRCode.toDataURL(withCurrentAdvSecret(lastQr));
@@ -154,42 +124,12 @@ export async function connectWhatsApp(onIncoming, onHumanReply = async () => {})
     if (type !== 'notify') return;
 
     for (const m of messages) {
-      const jid = m.key.remoteJid;
-      if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') continue;
+      const inbound = classifyInbound(m);
+      if (!inbound) continue;
 
-      // A message Baileys couldn't decrypt yet (signal session being
-      // renegotiated, typically right after a fresh link) arrives as a stub
-      // with no content; the phone then resends it and the same id can come
-      // through more than once. Answering each copy sent a client three
-      // main menus for one "Привет". Protocol traffic (revokes, key
-      // distribution) and reactions carry nothing to answer either.
-      if (!m.message || m.messageStubType) continue;
-      const contentType = getContentType(normalizeMessageContent(m.message));
-      if (!contentType || IGNORED_CONTENT.has(contentType)) continue;
-      if (seenIncomingIds.has(m.key.id)) continue;
-      rememberId(seenIncomingIds, m.key.id);
-
-      // Privacy-mode contacts address by LID (an opaque per-account id), not
-      // phone number — the real number.@s.whatsapp.net jid, when WhatsApp
-      // shares it, is on remoteJidAlt. Prefer whichever side is the actual
-      // phone-number jid so `phone` stays a real number everywhere else in
-      // the app (admin panel, ADMIN_PHONES matching, booking confirmations).
-      const pnJid = [jid, m.key.remoteJidAlt].find(j => j?.endsWith('@s.whatsapp.net'));
-      const phone = fromJid(pnJid || jid);
-
-      const text = m.message?.conversation || m.message?.extendedTextMessage?.text || null;
-
-      if (m.key.fromMe) {
-        // Our own send echoing back — ignore.
-        if (botSentIds.has(m.key.id)) continue;
-        // On reconnect WhatsApp can replay recent messages; an old echo must
-        // not re-trigger a takeover long after the fact (and after a restart
-        // botSentIds is empty, so even our own sends would look human).
-        const ageMs = Date.now() - Number(m.messageTimestamp || 0) * 1000;
-        if (ageMs > HUMAN_ECHO_MAX_AGE_MS) continue;
-
+      if (inbound.kind === 'human') {
         try {
-          await onHumanReply(phone, { text });
+          await onHumanReply(inbound.phone, { text: inbound.text });
         } catch (err) {
           console.error('Human reply handling error:', err);
         }
@@ -197,7 +137,7 @@ export async function connectWhatsApp(onIncoming, onHumanReply = async () => {})
       }
 
       try {
-        await onIncoming(phone, { text, profileName: m.pushName || undefined });
+        await onIncoming(inbound.phone, { text: inbound.text, profileName: inbound.profileName });
       } catch (err) {
         console.error('Incoming message handling error:', err);
       }
