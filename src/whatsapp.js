@@ -3,6 +3,7 @@
 // lives in Postgres (see waAuth.js) so it survives redeploys; only needs a
 // fresh QR scan if the linked device is actually logged out.
 import { makeWASocket, fetchLatestBaileysVersion, DisconnectReason } from '@whiskeysockets/baileys';
+import { randomBytes } from 'crypto';
 import P from 'pino';
 import QRCode from 'qrcode';
 import { db } from './database.js';
@@ -82,11 +83,34 @@ export async function connectWhatsApp(onIncoming, onHumanReply = async () => {})
 
   sock.ev.on('creds.update', saveCreds);
 
+  // Since late July 2026 WhatsApp sends companion_reg_refresh mid-pairing to
+  // retire the adv secret advertised in the QR. Baileys rc14 only acks it,
+  // so the QR keeps the retired secret and the phone answers "can't link new
+  // devices right now" (Baileys issue #2737, unreleased fix in PR #2765).
+  // Workaround until a release ships it: rotate the secret ourselves and
+  // re-render the QR on screen with it. pair-success reads
+  // state.creds.advSecretKey at verification time, so mutating it is enough.
+  let lastQr = null;
+  const withCurrentAdvSecret = (qr) => {
+    // QR payload: ref,noiseKey,identityKey,advSecret,platformId
+    const parts = qr.split(',');
+    parts[parts.length - 2] = state.creds.advSecretKey;
+    return parts.join(',');
+  };
+  sock.ws.on('CB:notification,type:companion_reg_refresh', async () => {
+    if (state.creds.me) return; // already paired — the secret verifies the session
+    state.creds.advSecretKey = randomBytes(32).toString('base64');
+    await saveCreds();
+    console.log('WhatsApp: companion_reg_refresh, rotated adv secret and re-rendered the QR');
+    if (lastQr) latestQrDataUrl = await QRCode.toDataURL(withCurrentAdvSecret(lastQr));
+  });
+
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      latestQrDataUrl = await QRCode.toDataURL(qr);
+      lastQr = qr;
+      latestQrDataUrl = await QRCode.toDataURL(withCurrentAdvSecret(qr));
       connectionStatus = 'closed';
       console.log('WhatsApp: scan QR in the admin panel to link the device');
     }
