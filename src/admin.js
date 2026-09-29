@@ -350,13 +350,13 @@ function startWindow(body) {
 }
 
 adminRouter.post('/api/services', async (req, res) => {
-  const { name, description, duration_minutes, slot_step_minutes, price } = req.body || {};
+  const { name, description, duration_minutes, slot_step_minutes, price, price_fixed } = req.body || {};
   if (!name || !duration_minutes || price == null) return res.status(400).json({ error: 'missing_fields' });
   const step = slotStep(slot_step_minutes);
   if (step.bad) return res.status(400).json({ error: 'bad_step' });
   res.json(await db.createService({
     name, description, durationMinutes: duration_minutes,
-    slotStepMinutes: step.value, price,
+    slotStepMinutes: step.value, price, priceFixed: price_fixed === true,
     ...startWindow(req.body || {}),
   }));
 });
@@ -378,7 +378,7 @@ function inUseResponse(res, kind, usage) {
 }
 
 adminRouter.put('/api/services/:id', async (req, res) => {
-  const { name, description, duration_minutes, slot_step_minutes, price, is_active } = req.body || {};
+  const { name, description, duration_minutes, slot_step_minutes, price, price_fixed, is_active } = req.body || {};
   if (!name || !duration_minutes || price == null) return res.status(400).json({ error: 'missing_fields' });
   const step = slotStep(slot_step_minutes);
   if (step.bad) return res.status(400).json({ error: 'bad_step' });
@@ -389,6 +389,7 @@ adminRouter.put('/api/services/:id', async (req, res) => {
       durationMinutes: duration_minutes,
       slotStepMinutes: step.value,
       price,
+      priceFixed: price_fixed === true,
       isActive: is_active !== false,
       ...startWindow(req.body || {}),
     })

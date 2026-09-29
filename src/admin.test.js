@@ -175,6 +175,19 @@ test('шаг записи принимает своё значение и отб
   await call('DELETE', `/api/services/${created.body.id}`);
 });
 
+test('фиксированная цена сохраняется и снимается', async () => {
+  const created = await call('POST', '/api/services', {
+    name: 'Стрижка-тест', duration_minutes: 60, slot_step_minutes: 30, price: 800, price_fixed: true,
+  });
+  assert.equal(created.body.price_fixed, true);
+
+  const edited = await call('PUT', `/api/services/${created.body.id}`, {
+    name: 'Стрижка-тест', duration_minutes: 60, slot_step_minutes: 30, price: 800, is_active: false,
+  });
+  assert.equal(edited.body.price_fixed, false, 'без флага цена снова «от»');
+  await call('DELETE', `/api/services/${created.body.id}`);
+});
+
 test('мастера создаются и отключаются', async () => {
   const created = await call('POST', '/api/masters', { name: 'Новый', description: 'брови' });
   assert.equal(created.status, 200);

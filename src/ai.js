@@ -2,6 +2,7 @@
 // question is an independent request built from the current services/masters
 // snapshot.
 import { db } from './database.js';
+import { formatPrice } from './utils.js';
 
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 
@@ -9,7 +10,7 @@ async function buildSystemPrompt() {
   const [services, masters] = await Promise.all([db.getActiveServices(), db.getActiveMasters()]);
 
   const servicesText = services
-    .map(s => `- ${s.name}: от ${s.price} сом, ${s.duration_minutes} мин`)
+    .map(s => `- ${s.name}: ${formatPrice(s.price, s.price_fixed)}, ${s.duration_minutes} мин`)
     .join('\n');
   const mastersText = masters.map(m => `- ${m.name}${m.description ? `: ${m.description}` : ''}`).join('\n');
 

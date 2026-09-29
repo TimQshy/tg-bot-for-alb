@@ -67,8 +67,10 @@ export const DAYS_FULL_EXPORT  = DAYS_FULL;
 
 // Postgres returns numeric as a string ("1500.00"), which is not what a
 // client should see in a chat message.
-export function formatPrice(value) {
-  return `${Math.round(Number(value)).toLocaleString('ru-RU')} сом`;
+// fixed=false marks the price as a floor — the service's final cost depends
+// on the client (hair length, material), so it reads «от 3 000 сом».
+export function formatPrice(value, fixed = true) {
+  return `${fixed ? '' : 'от '}${Math.round(Number(value)).toLocaleString('ru-RU')} сом`;
 }
 
 // Instagram refuses a single direct message longer than 2000 characters

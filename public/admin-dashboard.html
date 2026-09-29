@@ -689,6 +689,11 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <label class="field"><span class="field__label">Длительность, мин</span><input class="input" id="svcDur" inputmode="numeric"></label>
       <label class="field"><span class="field__label">Цена, сом</span><input class="input" id="svcPrice" inputmode="numeric"></label>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;margin:0 0 6px">
+      <button class="switch" role="switch" id="svcPriceFixed" aria-checked="false"></button>
+      <span class="field__label" style="margin:0">Фиксированная цена</span>
+    </label>
+    <p class="hint" style="margin-top:0">Выключено — бот называет цену «от» (например, окрашивание зависит от материала).</p>
     <div class="field">
       <label class="field__label" for="svcStep">Шаг записи</label>
       <select class="input" id="svcStep">
@@ -2508,7 +2513,7 @@ async function loadServices() {
         <span class="row__title">${escapeHtml(s.name)}${s.is_active ? '' : ' (скрыта)'}</span>
         <span class="row__sub">${s.duration_minutes} мин</span>
       </span>
-      <span class="row__price">${fmtMoney(s.price)}</span>
+      <span class="row__price">${s.price_fixed ? '' : 'от '}${fmtMoney(s.price)}</span>
       <svg class="row__chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
     </button>`).join('');
   document.getElementById('servicesCard').querySelectorAll('[data-edit-service]').forEach(b =>
@@ -2550,6 +2555,7 @@ async function openServiceSheet(id) {
     document.getElementById('svcDur').value = s.duration_minutes;
     setStepField(s.slot_step_minutes || 30);
     document.getElementById('svcPrice').value = Math.round(Number(s.price));
+    document.getElementById('svcPriceFixed').setAttribute('aria-checked', String(!!s.price_fixed));
     document.getElementById('svcActive').setAttribute('aria-checked', String(!!s.is_active));
     document.getElementById('svcFrom').value = (s.earliest_start || '').slice(0, 5);
     document.getElementById('svcTill').value = (s.latest_start || '').slice(0, 5);
@@ -2563,6 +2569,7 @@ async function openServiceSheet(id) {
     document.getElementById('svcDur').value = '60';
     setStepField(30);
     document.getElementById('svcPrice').value = '';
+    document.getElementById('svcPriceFixed').setAttribute('aria-checked', 'false');
     document.getElementById('svcActive').setAttribute('aria-checked', 'true');
     document.getElementById('svcFrom').value = '';
     document.getElementById('svcTill').value = '';
@@ -2576,6 +2583,9 @@ async function openServiceSheet(id) {
 }
 document.getElementById('addServiceBtn').addEventListener('click', () => openServiceSheet(null));
 document.getElementById('svcActive').addEventListener('click', function () {
+  this.setAttribute('aria-checked', String(this.getAttribute('aria-checked') !== 'true'));
+});
+document.getElementById('svcPriceFixed').addEventListener('click', function () {
   this.setAttribute('aria-checked', String(this.getAttribute('aria-checked') !== 'true'));
 });
 document.getElementById('svcBlocksDay').addEventListener('click', function () {
@@ -2594,6 +2604,7 @@ document.getElementById('svcSubmitBtn').addEventListener('click', async () => {
   const duration_minutes = parseInt(document.getElementById('svcDur').value, 10);
   const slot_step_minutes = readStepField();
   const price = parseFloat(document.getElementById('svcPrice').value);
+  const price_fixed = document.getElementById('svcPriceFixed').getAttribute('aria-checked') === 'true';
   const is_active = document.getElementById('svcActive').getAttribute('aria-checked') === 'true';
   const earliest_start = document.getElementById('svcFrom').value || null;
   const latest_start = document.getElementById('svcTill').value || null;
@@ -2609,8 +2620,8 @@ document.getElementById('svcSubmitBtn').addEventListener('click', async () => {
   const rules = { earliest_start, latest_start, blocks_day };
   try {
     let id = state.svc.id;
-    if (id) await api(`/api/services/${id}`, { method: 'PUT', body: JSON.stringify({ name, duration_minutes, slot_step_minutes, price, is_active, ...rules }) });
-    else { const created = await api('/api/services', { method: 'POST', body: JSON.stringify({ name, duration_minutes, slot_step_minutes, price, ...rules }) }); id = created.id; }
+    if (id) await api(`/api/services/${id}`, { method: 'PUT', body: JSON.stringify({ name, duration_minutes, slot_step_minutes, price, price_fixed, is_active, ...rules }) });
+    else { const created = await api('/api/services', { method: 'POST', body: JSON.stringify({ name, duration_minutes, slot_step_minutes, price, price_fixed, ...rules }) }); id = created.id; }
     await api(`/api/services/${id}/masters`, { method: 'PUT', body: JSON.stringify({ masterIds: state.svc.masterIds }) });
     closeSheet(); toast('Сохранено');
     loadServices();
@@ -2651,7 +2662,7 @@ async function deleteService(s) {
             method: 'PUT',
             body: JSON.stringify({
               name: s.name, duration_minutes: s.duration_minutes,
-              slot_step_minutes: s.slot_step_minutes, price: s.price, is_active: false,
+              slot_step_minutes: s.slot_step_minutes, price: s.price, price_fixed: s.price_fixed, is_active: false,
               earliest_start: s.earliest_start, latest_start: s.latest_start, blocks_day: s.blocks_day,
             }),
           });

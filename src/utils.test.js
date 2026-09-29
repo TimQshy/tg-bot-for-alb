@@ -5,7 +5,7 @@
 //   node --test src/utils.test.js
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { splitText } from './utils.js';
+import { splitText, formatPrice } from './utils.js';
 
 const LIMIT = 2000;
 const strip = s => s.replace(/\s+/g, '');
@@ -33,4 +33,9 @@ test('текст без единого пробела всё равно укла
 test('ровно по границе не режется', () => {
   assert.equal(splitText('я'.repeat(LIMIT), LIMIT).length, 1);
   assert.equal(splitText('я'.repeat(LIMIT + 1), LIMIT).length, 2);
+});
+
+test('нефиксированная цена идёт с «от», фиксированная — без', () => {
+  assert.equal(formatPrice('800.00', true), `${(800).toLocaleString('ru-RU')} сом`);
+  assert.equal(formatPrice(3000, false), `от ${(3000).toLocaleString('ru-RU')} сом`);
 });

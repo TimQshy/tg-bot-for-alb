@@ -32,7 +32,7 @@ export async function start(phone) {
 
   const items = services.slice(0, MENU_PAGE_SIZE).map(s => ({
     id: `svc:${s.id}`,
-    label: `${s.name} — ${formatPrice(s.price)} · ${s.duration_minutes} мин`,
+    label: `${s.name} — ${formatPrice(s.price, s.price_fixed)} · ${s.duration_minutes} мин`,
   }));
 
   return sendMenu(phone, '💅 Запись в салон\n\nВыберите услугу (ответьте цифрой):', items);
@@ -61,6 +61,7 @@ export async function chooseService(phone, serviceIdStr) {
     serviceDuration: service.duration_minutes,
     serviceStep: service.slot_step_minutes,
     servicePrice: service.price,
+    servicePriceFixed: service.price_fixed,
   });
 
   const items = masters.slice(0, MENU_PAGE_SIZE).map(m => ({
@@ -70,7 +71,7 @@ export async function chooseService(phone, serviceIdStr) {
 
   return sendMenu(
     phone,
-    `💅 ${service.name}\n💰 ${formatPrice(service.price)} · ⏱ ${service.duration_minutes} мин\n\nВыберите мастера (ответьте цифрой):`,
+    `💅 ${service.name}\n💰 ${formatPrice(service.price, service.price_fixed)} · ⏱ ${service.duration_minutes} мин\n\nВыберите мастера (ответьте цифрой):`,
     items
   );
 }
@@ -212,7 +213,7 @@ export async function chooseSlot(phone, encoded) {
       `👩 Мастер: ${s.masterName}\n` +
       `📅 Дата: ${formatDateFull(s.date)}\n` +
       `🕐 Время: ${s.startTime} – ${s.endTime}\n` +
-      `💰 Стоимость: ${formatPrice(s.servicePrice)}`,
+      `💰 Стоимость: ${formatPrice(s.servicePrice, s.servicePriceFixed)}`,
     [
       { id: 'confirm', label: '✅ Подтвердить' },
       { id: 'cancel', label: '❌ Отмена' },
@@ -248,7 +249,7 @@ export async function confirm(phone) {
       `👩 ${s.masterName}\n` +
       `📅 ${formatDateFull(s.date)}\n` +
       `🕐 ${s.startTime} – ${s.endTime}\n` +
-      `💰 ${formatPrice(s.servicePrice)}\n\n` +
+      `💰 ${formatPrice(s.servicePrice, s.servicePriceFixed)}\n\n` +
       `📋 Номер записи: #${appt.id}\n\n` +
       `До встречи! 👋`
   );
@@ -285,7 +286,7 @@ export async function showMyBookings(phone) {
       `💅 ${a.service_name}\n` +
       `👩 ${a.master_name}\n` +
       `📅 ${formatDateFull(String(a.appointment_date).slice(0, 10))}\n` +
-      `🕐 ${String(a.start_time).slice(0, 5)} – ${String(a.end_time).slice(0, 5)}  ·  💰 ${formatPrice(a.price)}\n` +
+      `🕐 ${String(a.start_time).slice(0, 5)} – ${String(a.end_time).slice(0, 5)}  ·  💰 ${formatPrice(a.price, a.price_fixed)}\n` +
       `#${a.id}\n\n`;
   }
   await sendText(phone, text.trim());

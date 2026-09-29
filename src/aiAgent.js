@@ -120,7 +120,7 @@ async function buildSystemPrompt(phone) {
     if (s.blocks_day) limits.push('занимает весь день мастера — в этот день к нему больше никого не записать');
 
     serviceLines.push(
-      `- id=${s.id} | ${s.name} | от ${formatPrice(s.price)} | ${s.duration_minutes} мин | ` +
+      `- id=${s.id} | ${s.name} | ${s.price_fixed ? 'цена фиксированная' : 'цена ориентировочная'}: ${formatPrice(s.price, s.price_fixed)} | ${s.duration_minutes} мин | ` +
         `мастера: ${who.map(m => `${m.name} (id=${m.id})`).join(', ') || 'нет'}` +
         (limits.length ? ` | ${limits.join('; ')}` : '')
     );
@@ -148,7 +148,10 @@ async function buildSystemPrompt(phone) {
 Это WhatsApp, а не markdown: никаких **, ##, --- и таблиц — клиент увидит эти символы как есть. Жирный — одинарные *звёздочки*, список — просто строки через перенос.
 
 ЦЕНЫ
-Все цены ориентировочные, указаны «от». Итог зависит от длины и густоты волос, их состояния и расхода материалов. Всегда говори «от X сом» и, если уместно, коротко поясняй, от чего зависит итог. Точную сумму мастер называет на консультации перед работой.
+У каждой услуги в списке указано, какая у неё цена.
+- «цена фиксированная» — называй точную сумму без «от»: «стрижка стоит 800 сом». Не добавляй оговорок, что итог может измениться.
+- «цена ориентировочная» — говори «от X сом» и, если уместно, коротко поясняй, от чего зависит итог (длина и густота волос, их состояние, расход материалов). Точную сумму мастер называет на консультации перед работой.
+Поле price в ответах инструментов уже записано нужным образом — передавай его как есть.
 
 ЧТО ТЫ УМЕЕШЬ САМ (через инструменты)
 - посмотреть свободное и занятое время на дату: check_availability
@@ -434,7 +437,7 @@ async function toolCreateBooking(phone, { service_id, master_id, date, start_tim
     date_human: formatDateFull(date),
     start: slot.start,
     end: slot.end,
-    price_from: formatPrice(service.price),
+    price: formatPrice(service.price, service.price_fixed),
   };
 }
 
@@ -450,7 +453,7 @@ async function toolListMyBookings(phone) {
       date: String(a.appointment_date).slice(0, 10),
       start: String(a.start_time).slice(0, 5),
       end: String(a.end_time).slice(0, 5),
-      price_from: formatPrice(a.price),
+      price: formatPrice(a.price, a.price_fixed),
     })),
   };
 }

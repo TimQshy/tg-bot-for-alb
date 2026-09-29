@@ -123,6 +123,11 @@ ALTER TABLE services ADD COLUMN IF NOT EXISTS earliest_start TIME;
 ALTER TABLE services ADD COLUMN IF NOT EXISTS latest_start TIME;
 ALTER TABLE services ADD COLUMN IF NOT EXISTS blocks_day BOOLEAN NOT NULL DEFAULT false;
 
+-- A haircut costs what it says; colouring depends on hair and material, so
+-- its price is a floor ("от 3 000 сом"). false = shown with «от» — the
+-- default because the AI used to quote every price that way.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS price_fixed BOOLEAN NOT NULL DEFAULT false;
+
 -- Human takeover: while this is in the future the bot stays silent in that
 -- chat, so an admin answering the client by hand isn't talked over by the
 -- FSM. Set from whatsapp.js when an outgoing message appears that the bot
@@ -519,7 +524,7 @@ export const db = {
 
   async getUserAppointments(userId) {
     const { rows } = await pool.query(
-      `SELECT a.*, m.name AS master_name, s.name AS service_name, s.price
+      `SELECT a.*, m.name AS master_name, s.name AS service_name, s.price, s.price_fixed
        FROM appointments a
        JOIN masters m ON m.id=a.master_id
        JOIN services s ON s.id=a.service_id
@@ -535,7 +540,7 @@ export const db = {
     const { rows } = await pool.query(
       `SELECT a.*,
               m.name AS master_name,
-              s.name AS service_name, s.price,
+              s.name AS service_name, s.price, s.price_fixed,
               u.name AS user_name
        FROM appointments a
        JOIN masters m ON m.id=a.master_id
@@ -566,7 +571,7 @@ export const db = {
   // ── Admin: appointments list ────────────────────────────────────────────
   async listAppointments({ dateFrom = null, dateTo = null, masterId = null, status = null } = {}) {
     const { rows } = await pool.query(
-      `SELECT a.*, m.name AS master_name, s.name AS service_name, s.price, u.name AS user_name
+      `SELECT a.*, m.name AS master_name, s.name AS service_name, s.price, s.price_fixed, u.name AS user_name
        FROM appointments a
        JOIN masters m ON m.id=a.master_id
        JOIN services s ON s.id=a.service_id
@@ -640,31 +645,32 @@ export const db = {
   },
 
   async createService({
-    name, description, durationMinutes, slotStepMinutes, price,
+    name, description, durationMinutes, slotStepMinutes, price, priceFixed = false,
     earliestStart = null, latestStart = null, blocksDay = false,
   }) {
     const { rows } = await pool.query(
       `INSERT INTO services
          (name, description, duration_minutes, slot_step_minutes, price,
-          earliest_start, latest_start, blocks_day)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+          earliest_start, latest_start, blocks_day, price_fixed)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
       [name, description || null, durationMinutes, slotStepMinutes || 30, price,
-       earliestStart || null, latestStart || null, !!blocksDay]
+       earliestStart || null, latestStart || null, !!blocksDay, !!priceFixed]
     );
     return rows[0];
   },
 
   async updateService(id, {
-    name, description, durationMinutes, slotStepMinutes, price, isActive,
+    name, description, durationMinutes, slotStepMinutes, price, priceFixed = false, isActive,
     earliestStart = null, latestStart = null, blocksDay = false,
   }) {
     const { rows } = await pool.query(
       `UPDATE services
          SET name=$2, description=$3, duration_minutes=$4, slot_step_minutes=$5,
-             price=$6, is_active=$7, earliest_start=$8, latest_start=$9, blocks_day=$10
+             price=$6, is_active=$7, earliest_start=$8, latest_start=$9, blocks_day=$10,
+             price_fixed=$11
        WHERE id=$1 RETURNING *`,
       [id, name, description || null, durationMinutes, slotStepMinutes || 30, price, isActive,
-       earliestStart || null, latestStart || null, !!blocksDay]
+       earliestStart || null, latestStart || null, !!blocksDay, !!priceFixed]
     );
     return rows[0];
   },
