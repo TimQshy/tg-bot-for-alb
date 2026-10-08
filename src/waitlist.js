@@ -173,7 +173,8 @@ async function sendOffer(entry, date, slot) {
     [
       { id: `waitlist:confirm:${offer.id}`, label: '✅ Записаться' },
       { id: `waitlist:decline:${offer.id}`, label: '❌ Не смогу' },
-    ]
+    ],
+    { template: { name: 'waitlist_offer', params: [formatDateFull(date), `${slot.start} – ${slot.end}`, full.service_name, full.master_name] } }
   );
   return offer;
 }
@@ -225,7 +226,8 @@ export async function handleOfferConfirm(phone, idStr) {
     sendText(
       adminPhone,
       `📩 Запись из листа ожидания #${appt.id}\n👤 ${phone}\n💅 ${offer.service_name}\n` +
-        `👩 ${offer.master_name}\n📅 ${formatDateFull(dateOf(offer.desired_date))}`
+        `👩 ${offer.master_name}\n📅 ${formatDateFull(dateOf(offer.desired_date))}`,
+      { template: { name: 'admin_waitlist_booking', params: [appt.id, phone, offer.service_name, offer.master_name, formatDateFull(dateOf(offer.desired_date))] } }
     ).catch(() => {});
   }
 }

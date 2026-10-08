@@ -1,9 +1,10 @@
-// Express app: health check, privacy page, and the /admin panel. WhatsApp
-// messages no longer arrive here — Baileys delivers them in-process (see
-// whatsapp.js connectWhatsApp), which calls handleIncoming() directly.
+// Express app: health check, privacy page, the /admin panel and Meta's
+// webhooks. On Baileys, WhatsApp messages never arrive here — whatsapp.js
+// delivers them in-process to handleIncoming(). On the Cloud API they come
+// through /webhook/whatsapp (waCloud.js), which calls the same function.
 import express from 'express';
 import { db } from './database.js';
-import { sendText } from './whatsapp.js';
+import { sendText, webhookRouter } from './whatsapp.js';
 import { getLastMenu, resolveMenuReply, clearLastMenu } from './menu.js';
 import { getSession, clearSession } from './session.js';
 import * as booking from './booking.js';
@@ -41,6 +42,14 @@ if (instagramEnabled) {
     console.warn('IG_APP_SECRET is not set — incoming Instagram webhooks are not verified');
   }
   console.log('Instagram auto-replies enabled');
+}
+
+// WhatsApp Cloud API deliveries, for a salon with WA_TRANSPORT=cloud. Behind
+// nginx the public URL is https://<domain>/s/<slug>/webhook/whatsapp — that
+// is the override_callback_uri set on the salon's WhatsApp Business account.
+if (webhookRouter) {
+  app.use('/webhook/whatsapp', webhookRouter);
+  console.log('WhatsApp Cloud API webhook enabled');
 }
 
 app.get('/privacy', (_req, res) => {

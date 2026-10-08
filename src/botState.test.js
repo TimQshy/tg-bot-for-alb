@@ -10,6 +10,7 @@ mock.module('./whatsapp.js', {
   namedExports: {
     sendText: async (to, text) => { sent.push({ to, text }); },
     getWaStatus: () => ({ status: 'open', qrDataUrl: null }),
+    webhookRouter: null,
   },
 });
 
