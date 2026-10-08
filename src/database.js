@@ -805,6 +805,16 @@ export const db = {
     );
   },
 
+  // When the client last wrote — WhatsApp Cloud API only lets free text
+  // through within 24h of it (see waCloud.js). null: they never wrote.
+  async lastInboundAt(phone) {
+    const { rows } = await pool.query(
+      `SELECT MAX(created_at) AS at FROM messages WHERE phone=$1 AND direction='in'`,
+      [phone]
+    );
+    return rows[0].at;
+  },
+
   async getInboundMessageTexts() {
     const { rows } = await pool.query(
       `SELECT text FROM messages WHERE direction='in' AND text IS NOT NULL ORDER BY created_at`
