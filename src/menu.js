@@ -40,10 +40,12 @@ export function resolveMenuReply(phone, text) {
   return ids[idx] ?? null;
 }
 
-// items: [{ id, label }]
-export function sendMenu(phone, bodyText, items, { footer } = {}) {
+// items: [{ id, label }]. template: what WhatsApp Cloud API sends instead
+// when the client is outside the 24h window (see waCloud.js) — the numbered
+// menu is still recorded, so a reply of "1" resolves the same way.
+export function sendMenu(phone, bodyText, items, { footer, template } = {}) {
   const lines = items.map((it, i) => `${i + 1}. ${it.label}`);
   const text = [bodyText, '', ...lines, footer ? `\n${footer}` : null].filter(Boolean).join('\n');
   setLastMenu(phone, items.map(it => it.id));
-  return sendText(phone, text);
+  return sendText(phone, text, { template });
 }

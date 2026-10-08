@@ -290,7 +290,11 @@ adminRouter.post('/api/appointments/:id/cancel', async (req, res) => {
       `💅 ${appt.service_name}\n👩 ${appt.master_name}\n` +
       `📅 ${formatDateFull(String(appt.appointment_date).slice(0, 10))}\n` +
       `🕐 ${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}\n\n` +
-      `Для новой записи напишите "меню".`
+      `Для новой записи напишите "меню".`,
+    { template: { name: 'appt_cancelled_by_salon', params: [
+      appt.service_name, appt.master_name, formatDateFull(String(appt.appointment_date).slice(0, 10)),
+      `${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}`,
+    ] } }
   ).catch(() => {});
   waitlist.notifyNext(appt.master_id, String(appt.appointment_date).slice(0, 10)).catch(() => {});
 
@@ -312,7 +316,8 @@ adminRouter.post('/api/appointments/:id/reschedule', async (req, res) => {
     appt.user_id,
     `🔄 Ваша запись перенесена\n\n` +
       `💅 ${appt.service_name}\n👩 ${appt.master_name}\n` +
-      `📅 ${formatDateFull(date)}\n🕐 ${startTime} – ${endTime}`
+      `📅 ${formatDateFull(date)}\n🕐 ${startTime} – ${endTime}`,
+    { template: { name: 'appt_moved_by_salon', params: [appt.service_name, appt.master_name, formatDateFull(date), `${startTime} – ${endTime}`] } }
   ).catch(() => {});
   // Old slot just freed up too — offer it to whoever's waiting on that date.
   waitlist.notifyNext(appt.master_id, String(appt.appointment_date).slice(0, 10)).catch(() => {});
@@ -786,7 +791,8 @@ adminRouter.post('/api/appointments', async (req, res) => {
   sendText(
     userId,
     `✅ Вас записали\n\n💅 ${appt.service_name}\n👩 ${appt.master_name}\n` +
-      `📅 ${formatDateFull(date)}\n🕐 ${startTime} – ${endTime}`
+      `📅 ${formatDateFull(date)}\n🕐 ${startTime} – ${endTime}`,
+    { template: { name: 'appt_created_by_salon', params: [appt.service_name, appt.master_name, formatDateFull(date), `${startTime} – ${endTime}`] } }
   ).then(() => sendAddress(userId)).catch(() => {});
 
   res.json(appt);

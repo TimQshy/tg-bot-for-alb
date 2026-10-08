@@ -21,12 +21,14 @@ const ADMIN_ALERT_WITHIN_MIN = 24 * 60;
 const MORNING_HOUR = 9;
 
 async function sendReminder(appt, label) {
+  const date = formatDateFull(String(appt.appointment_date).slice(0, 10));
+  const time = `${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}`;
   await sendText(
     appt.user_id,
     `⏰ Напоминание: у вас запись ${label}\n\n` +
       `💅 ${appt.service_name}\n👩 ${appt.master_name}\n` +
-      `📅 ${formatDateFull(String(appt.appointment_date).slice(0, 10))}\n` +
-      `🕐 ${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}`
+      `📅 ${date}\n🕐 ${time}`,
+    { template: { name: 'appt_reminder', params: [label, appt.service_name, appt.master_name, date, time] } }
   );
 }
 
@@ -48,7 +50,11 @@ async function runConfirmRequests() {
         [
           { id: `appt_confirm:${appt.id}`, label: '✅ Да, приду' },
           { id: `cancel_appt:${appt.id}`, label: '❌ Отменить запись' },
-        ]
+        ],
+        { template: { name: 'appt_confirm', params: [
+          appt.service_name, appt.master_name, formatDateFull(date),
+          `${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}`,
+        ] } }
       );
       await db.markConfirmRequestSent(appt.id);
     } catch (err) {
@@ -73,7 +79,12 @@ async function runAdminAlerts() {
             `👤 ${appt.user_name}${isWalkIn(appt.user_id) ? '' : ` (${appt.user_id})`}\n` +
             `💅 ${appt.service_name}\n👩 ${appt.master_name}\n` +
             `📅 ${formatDateFull(date)}\n🕐 ${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}\n\n` +
-            `Стоит позвонить. Не придёт — отмените запись в панели, место уйдёт в лист ожидания.`
+            `Стоит позвонить. Не придёт — отмените запись в панели, место уйдёт в лист ожидания.`,
+          { template: { name: 'admin_unconfirmed', params: [
+            appt.id, appt.user_name, isWalkIn(appt.user_id) ? '' : appt.user_id,
+            appt.service_name, appt.master_name, formatDateFull(date),
+            `${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}`,
+          ] } }
         );
       }
       // Marked even with no admin phones configured: the alternative is

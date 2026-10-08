@@ -372,7 +372,11 @@ export async function handleAdminCancel(phone, apptIdStr) {
       `👩 ${appt.master_name}\n` +
       `📅 ${formatDateFull(String(appt.appointment_date).slice(0, 10))}\n` +
       `🕐 ${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}\n\n` +
-      `Для новой записи напишите "меню".`
+      `Для новой записи напишите "меню".`,
+    { template: { name: 'appt_cancelled_by_salon', params: [
+      appt.service_name, appt.master_name, formatDateFull(String(appt.appointment_date).slice(0, 10)),
+      `${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}`,
+    ] } }
   );
 
   waitlist.notifyNext(appt.master_id, String(appt.appointment_date).slice(0, 10)).catch(() => {});
@@ -385,9 +389,9 @@ export async function handleAdminCancel(phone, apptIdStr) {
 // notifications. They return null/false rather than messaging the client —
 // the caller owns the wording.
 
-function notifyAdmins(text) {
+function notifyAdmins(text, template) {
   for (const adminPhone of ADMIN_PHONES()) {
-    sendText(adminPhone, text).catch(() => {});
+    sendText(adminPhone, text, { template }).catch(() => {});
   }
 }
 
@@ -413,7 +417,11 @@ export async function createAppointmentFor(phone, { serviceId, masterId, date, s
       `👩 ${full.master_name}\n` +
       `📅 ${formatDateFull(date)}\n` +
       `🕐 ${startTime} – ${endTime}\n\n` +
-      `Чтобы отменить, напишите: cancel ${appt.id}`
+      `Чтобы отменить, напишите: cancel ${appt.id}`,
+    { name: 'admin_new_booking', params: [
+      appt.id, full.user_name, phone, full.service_name, full.master_name,
+      formatDateFull(date), `${startTime} – ${endTime}`, appt.id,
+    ] }
   );
   return appt;
 }
@@ -431,7 +439,11 @@ export async function cancelAppointmentFor(phone, apptId) {
       `💅 ${appt.service_name}\n` +
       `👩 ${appt.master_name}\n` +
       `📅 ${formatDateFull(date)}\n` +
-      `🕐 ${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}`
+      `🕐 ${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}`,
+    { name: 'admin_client_cancelled', params: [
+      apptId, appt.user_name, phone, appt.service_name, appt.master_name, formatDateFull(date),
+      `${String(appt.start_time).slice(0, 5)} – ${String(appt.end_time).slice(0, 5)}`,
+    ] }
   );
   waitlist.notifyNext(appt.master_id, date).catch(() => {});
   return true;
@@ -455,7 +467,12 @@ export async function rescheduleAppointmentFor(phone, apptId, { date, startTime,
       `💅 ${appt.service_name}\n` +
       `👩 ${appt.master_name}\n` +
       `Было: ${formatDateFull(oldDate)} ${String(appt.start_time).slice(0, 5)}\n` +
-      `Стало: ${formatDateFull(date)} ${startTime} – ${endTime}`
+      `Стало: ${formatDateFull(date)} ${startTime} – ${endTime}`,
+    { name: 'admin_booking_moved', params: [
+      apptId, appt.user_name, phone, appt.service_name, appt.master_name,
+      `${formatDateFull(oldDate)} ${String(appt.start_time).slice(0, 5)}`,
+      `${formatDateFull(date)} ${startTime} – ${endTime}`,
+    ] }
   );
   if (oldDate !== date) waitlist.notifyNext(appt.master_id, oldDate).catch(() => {});
   return await db.getAppointmentById(apptId);

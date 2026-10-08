@@ -8,6 +8,7 @@
 // the next person.
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { formatDateFull } from './utils.js';
 
 const DATE = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
 const MASTER_ID = 3;
@@ -100,7 +101,7 @@ mock.module('./whatsapp.js', {
 });
 
 mock.module('./menu.js', {
-  namedExports: { sendMenu: async (to, text, items) => { menus.push({ to, text, items }); } },
+  namedExports: { sendMenu: async (to, text, items, opts = {}) => { menus.push({ to, text, items, opts }); } },
 });
 
 mock.module('./schedule.js', {
@@ -246,4 +247,14 @@ test('перенос на другую дату закрывает живое п
   assert.equal(offers[0].status, 'expired');
   assert.equal(dateOf(entries[0].desired_date), other);
   assert.equal(entries[0].status, 'waiting', 'место в очереди не трогаем');
+});
+
+test('предложение из листа ожидания несёт шаблон для Cloud API', async () => {
+  seed();
+  await offerNow();
+
+  assert.deepEqual(menus[0].opts.template, {
+    name: 'waitlist_offer',
+    params: [formatDateFull(DATE), '15:00 – 16:00', 'Маникюр', 'Айгуль'],
+  });
 });
