@@ -138,3 +138,147 @@ test('токен истёк — панель видит, что салон от�
   await wa.sendText('996700000106', 'Здравствуйте!');
   assert.equal(wa.getWaStatus().status, 'closed');
 });
+
+// ── Inbound ────────────────────────────────────────────────────────────────
+
+function delivery(field, value, phoneNumberId = '1000') {
+  return {
+    object: 'whatsapp_business_account',
+    entry: [{
+      id: 'WABA1',
+      changes: [{ field, value: { messaging_product: 'whatsapp', metadata: { phone_number_id: phoneNumberId }, ...value } }],
+    }],
+  };
+}
+
+function clientMessage(from, id, message) {
+  return delivery('messages', {
+    contacts: [{ profile: { name: 'Айнура' }, wa_id: from }],
+    messages: [{ from, id, timestamp: '1790000000', ...message }],
+  });
+}
+
+const text = body => ({ type: 'text', text: { body } });
+
+test('сообщение клиента доходит до бота с номером и именем', async () => {
+  reset();
+  await wa.handleDelivery(clientMessage('996700000201', 'wamid.IN1', text('Привет')));
+  assert.deepEqual(incoming, [{ phone: '996700000201', text: 'Привет', profileName: 'Айнура' }]);
+});
+
+test('голосовое или фото доходит с пустым текстом — бот не молчит', async () => {
+  reset();
+  await wa.handleDelivery(clientMessage('996700000202', 'wamid.IN2', { type: 'audio', audio: { id: 'm1' } }));
+  assert.deepEqual(incoming, [{ phone: '996700000202', text: '', profileName: 'Айнура' }]);
+});
+
+test('реакция ответа не получает', async () => {
+  reset();
+  await wa.handleDelivery(clientMessage('996700000203', 'wamid.IN3', { type: 'reaction', reaction: { emoji: '👍' } }));
+  assert.equal(incoming.length, 0);
+});
+
+test('повторная доставка того же сообщения — один ответ', async () => {
+  reset();
+  const d = clientMessage('996700000204', 'wamid.IN4', text('Привет'));
+  await wa.handleDelivery(d);
+  await wa.handleDelivery(d);
+  assert.equal(incoming.length, 1);
+});
+
+test('доставка для чужого номера салона отбрасывается', async () => {
+  reset();
+  const d = clientMessage('996700000205', 'wamid.IN5', text('Привет'));
+  d.entry[0].changes[0].value.metadata.phone_number_id = '2000';
+  await wa.handleDelivery(d);
+  assert.equal(incoming.length, 0);
+});
+
+test('первый ответ новому клиенту уходит текстом, даже если база ещё не записала его сообщение', async () => {
+  reset();
+  lastInbound = null; // the insert in webhook.js hasn't landed yet
+  onIncomingHook = phone => wa.sendText(phone, 'Здравствуйте! Выберите услугу');
+  await wa.handleDelivery(clientMessage('996700000206', 'wamid.IN6', text('Привет')));
+
+  assert.equal(graphCalls.length, 1);
+  assert.equal(graphCalls[0].body.type, 'text');
+});
+
+test('ответ администратора из приложения Business передаётся как ручной ответ', async () => {
+  reset();
+  await wa.handleDelivery(delivery('smb_message_echoes', {
+    message_echoes: [{ from: '996555000000', to: '996700000207', id: 'wamid.ECHO1', type: 'text', text: { body: 'Сейчас посмотрю' } }],
+  }));
+  assert.deepEqual(human, [{ phone: '996700000207', text: 'Сейчас посмотрю' }]);
+});
+
+test('эхо собственной отправки бота не считается ответом человека', async () => {
+  reset();
+  lastInbound = new Date();
+  graphReply = () => ({ ok: true, body: { messages: [{ id: 'wamid.BOT1' }] } });
+  await wa.sendText('996700000208', 'Ваша запись подтверждена');
+
+  await wa.handleDelivery(delivery('smb_message_echoes', {
+    message_echoes: [{ from: '996555000000', to: '996700000208', id: 'wamid.BOT1', type: 'text', text: { body: 'Ваша запись подтверждена' } }],
+  }));
+  assert.equal(human.length, 0);
+});
+
+// ── The HTTP surface Meta talks to ─────────────────────────────────────────
+
+async function withServer(fn) {
+  const app = express();
+  // Same rawBody hook as webhook.js: the signature covers the exact bytes.
+  app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+  app.use('/webhook/whatsapp', wa.waCloudRouter);
+  const server = app.listen(0);
+  await new Promise(resolve => server.once('listening', resolve));
+  try {
+    return await fn(`http://127.0.0.1:${server.address().port}/webhook/whatsapp`);
+  } finally {
+    server.close();
+  }
+}
+
+const sign = raw => 'sha256=' + crypto.createHmac('sha256', 'app-secret').update(raw).digest('hex');
+
+test('проверка подписки Meta: верный токен — challenge, чужой — 403', async () => {
+  await withServer(async url => {
+    const ok = await realFetch(`${url}?hub.mode=subscribe&hub.verify_token=verify-me&hub.challenge=42`);
+    assert.equal(ok.status, 200);
+    assert.equal(await ok.text(), '42');
+
+    const bad = await realFetch(`${url}?hub.mode=subscribe&hub.verify_token=nope&hub.challenge=42`);
+    assert.equal(bad.status, 403);
+  });
+});
+
+test('доставка с неверной подписью — 403 и ничего не обработано', async () => {
+  reset();
+  await withServer(async url => {
+    const raw = JSON.stringify(clientMessage('996700000209', 'wamid.IN9', text('Привет')));
+    const res = await realFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': 'sha256=forged' },
+      body: raw,
+    });
+    assert.equal(res.status, 403);
+  });
+  assert.equal(incoming.length, 0);
+});
+
+test('подписанная доставка — 200 сразу, сообщение обработано', async () => {
+  reset();
+  await withServer(async url => {
+    const raw = JSON.stringify(clientMessage('996700000210', 'wamid.IN10', text('Привет')));
+    const res = await realFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': sign(raw) },
+      body: raw,
+    });
+    assert.equal(res.status, 200);
+  });
+  // Processing runs after the 200 — give it a tick to land.
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.deepEqual(incoming.map(m => m.phone), ['996700000210']);
+});

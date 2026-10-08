@@ -6,8 +6,9 @@
 // Meta only takes free text within 24h of the client's last message. Past
 // that a send needs an approved template (WHATSAPP_CLOUD.md lists them); a
 // send without one is dropped with a warning rather than refused by Meta.
+import express from 'express';
 import { db } from './database.js';
-import { isWalkIn, rememberId } from './utils.js';
+import { isWalkIn, rememberId, metaSignatureValid } from './utils.js';
 
 const GRAPH = 'https://graph.facebook.com/v26.0';
 const WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -23,6 +24,8 @@ const botSentIds = new Set();
 // inbound message without awaiting the insert, so the bot's first reply to a
 // new client can query the database before the row is there.
 const lastInboundSeen = new Map();
+// Ids Meta already delivered — it retries anything it isn't sure we got.
+const seenIds = new Set();
 
 // Meta refuses a template parameter that is empty or holds a newline, a tab
 // or more than four spaces in a row.
@@ -116,3 +119,72 @@ export async function connectWhatsApp(onIncoming, onHumanReply = async () => {})
 export function getWaStatus() {
   return { status: connectionStatus, qrDataUrl: null, transport: 'cloud' };
 }
+
+// ── Inbound — Meta's webhook ───────────────────────────────────────────────
+
+async function safely(label, fn) {
+  try {
+    await fn();
+  } catch (err) {
+    console.error(`${label} handling error:`, err);
+  }
+}
+
+async function handleMessages(value) {
+  for (const s of value.statuses || []) {
+    if (s.status === 'failed') {
+      console.error(`WhatsApp Cloud: message to ${s.recipient_id} failed:`, JSON.stringify(s.errors ?? null));
+    }
+  }
+
+  const profileName = value.contacts?.[0]?.profile?.name || null;
+  for (const m of value.messages || []) {
+    if (!m.id || seenIds.has(m.id) || m.type === 'reaction') continue;
+    rememberId(seenIds, m.id);
+    lastInboundSeen.set(m.from, Date.now());
+    // Photos, voice notes and the like still reach the bot, with no text —
+    // exactly as Baileys passes them, so it answers rather than going quiet.
+    const text = m.type === 'text' ? m.text?.body || '' : '';
+    await safely('Incoming message', () => handlers.onIncoming(m.from, { text, profileName }));
+  }
+}
+
+async function handleEchoes(value) {
+  for (const e of value.message_echoes || []) {
+    if (!e.id || seenIds.has(e.id) || botSentIds.has(e.id) || e.type !== 'text') continue;
+    rememberId(seenIds, e.id);
+    await safely('Human reply', () => handlers.onHumanReply(e.to, { text: e.text?.body || '' }));
+  }
+}
+
+export async function handleDelivery(body) {
+  for (const entry of body?.entry || []) {
+    for (const change of entry.changes || []) {
+      const value = change.value || {};
+      // One Meta app can serve several salons; only this one's number is ours.
+      if (value.metadata?.phone_number_id !== process.env.WA_PHONE_NUMBER_ID) continue;
+      if (change.field === 'messages') await handleMessages(value);
+      else if (change.field === 'smb_message_echoes') await handleEchoes(value);
+    }
+  }
+}
+
+export const waCloudRouter = express.Router();
+
+waCloudRouter.get('/', (req, res) => {
+  const q = req.query;
+  if (q['hub.mode'] === 'subscribe' && q['hub.verify_token'] === process.env.WA_VERIFY_TOKEN) {
+    return res.send(q['hub.challenge']);
+  }
+  res.sendStatus(403);
+});
+
+waCloudRouter.post('/', (req, res) => {
+  if (!metaSignatureValid(req, process.env.WA_APP_SECRET)) {
+    console.warn('WhatsApp Cloud: bad signature, dropping delivery');
+    return res.sendStatus(403);
+  }
+  // Answer first: Meta retries anything that isn't a prompt 200.
+  res.sendStatus(200);
+  handleDelivery(req.body).catch(err => console.error('WhatsApp Cloud webhook error:', err));
+});
