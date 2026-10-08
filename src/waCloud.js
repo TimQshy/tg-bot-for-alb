@@ -53,8 +53,11 @@ async function inWindow(phone) {
 function logSendError(to, error, template) {
   const code = error?.code;
   const what = template ? ` (template ${template.name})` : '';
-  // 190: the token was revoked or expired — nothing will send until it's replaced.
-  if (code === 190) connectionStatus = 'closed';
+  // Nothing will send until someone fixes access: 190 — token revoked or
+  // expired; 10, 200, 100/33 — the system user lost rights to the account.
+  if (code === 190 || code === 10 || code === 200 || (code === 100 && error?.error_subcode === 33)) {
+    connectionStatus = 'closed';
+  }
   if (code === 131047) {
     console.warn(`WhatsApp Cloud: Meta says ${to} is outside the 24h window, our check said inside${what}`);
     return;
@@ -93,6 +96,9 @@ export async function sendText(to, text, { template } = {}) {
       messaging_product: 'whatsapp', to, ...message,
     });
     if (!ok) return logSendError(to, body.error, message.type === 'template' ? template : null);
+    // A failed startup check (network not up yet) mustn't leave the panel
+    // showing a token problem while messages are going out fine.
+    connectionStatus = 'open';
     const id = body.messages?.[0]?.id;
     if (id) rememberId(botSentIds, id);
   } catch (err) {
@@ -151,9 +157,12 @@ async function handleMessages(value) {
 
 async function handleEchoes(value) {
   for (const e of value.message_echoes || []) {
-    if (!e.id || seenIds.has(e.id) || botSentIds.has(e.id) || e.type !== 'text') continue;
+    // A voice note or photo from staff is a human answer too — as on Baileys,
+    // only reactions don't count, and non-text arrives with no text.
+    if (!e.id || seenIds.has(e.id) || botSentIds.has(e.id) || e.type === 'reaction') continue;
     rememberId(seenIds, e.id);
-    await safely('Human reply', () => handlers.onHumanReply(e.to, { text: e.text?.body || '' }));
+    const text = e.type === 'text' ? e.text?.body ?? null : null;
+    await safely('Human reply', () => handlers.onHumanReply(e.to, { text }));
   }
 }
 

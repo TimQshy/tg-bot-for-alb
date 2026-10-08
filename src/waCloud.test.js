@@ -282,3 +282,42 @@ test('подписанная доставка — 200 сразу, сообщен
   await new Promise(resolve => setTimeout(resolve, 20));
   assert.deepEqual(incoming.map(m => m.phone), ['996700000210']);
 });
+
+// ── Status follows what Meta actually answers ─────────────────────────────
+
+test('отправка прошла — панель снова видит подключение, даже после сбоя при запуске', async () => {
+  reset();
+  lastInbound = new Date();
+  graphReply = () => ({ ok: false, body: { error: { code: 190, message: 'Session has expired' } } });
+  await wa.sendText('996700000301', 'Здравствуйте!');
+  assert.equal(wa.getWaStatus().status, 'closed');
+
+  graphReply = okReply;
+  await wa.sendText('996700000301', 'Здравствуйте!');
+  assert.equal(wa.getWaStatus().status, 'open');
+});
+
+test('доступ к аккаунту WhatsApp отозван — панель видит отключение', async () => {
+  reset();
+  lastInbound = new Date();
+  for (const error of [{ code: 10 }, { code: 200 }, { code: 100, error_subcode: 33 }]) {
+    graphReply = okReply;
+    await wa.sendText('996700000302', 'Здравствуйте!');
+    assert.equal(wa.getWaStatus().status, 'open');
+
+    graphReply = () => ({ ok: false, body: { error: { message: 'Permission denied', ...error } } });
+    await wa.sendText('996700000302', 'Здравствуйте!');
+    assert.equal(wa.getWaStatus().status, 'closed', JSON.stringify(error));
+  }
+});
+
+test('голосовое или фото от администратора из приложения тоже ставит бота на паузу', async () => {
+  reset();
+  await wa.handleDelivery(delivery('smb_message_echoes', {
+    message_echoes: [
+      { from: '996555000000', to: '996700000303', id: 'wamid.ECHO_AUDIO', type: 'audio', audio: { id: 'm2' } },
+      { from: '996555000000', to: '996700000303', id: 'wamid.ECHO_REACT', type: 'reaction', reaction: { emoji: '👍' } },
+    ],
+  }));
+  assert.deepEqual(human, [{ phone: '996700000303', text: null }]);
+});
