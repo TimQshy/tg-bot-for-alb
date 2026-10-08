@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const DAYS_FULL  = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня',
@@ -108,4 +110,29 @@ export const isWalkIn = userId => String(userId || '').startsWith(WALKIN_PREFIX)
 
 export function newWalkInId() {
   return `${WALKIN_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+// Bounded set of recently seen message ids: a redelivery or an echo arrives
+// within seconds, so only the last few hundred matter.
+const IDS_MAX = 500;
+export function rememberId(set, id) {
+  set.add(id);
+  if (set.size > IDS_MAX) {
+    const oldest = set.values();
+    for (let i = 0; i < IDS_MAX / 5; i++) set.delete(oldest.next().value);
+  }
+}
+
+// Meta signs every webhook delivery — Instagram and WhatsApp Cloud alike —
+// with the app secret, over the exact bytes it sent, hence the rawBody kept
+// by express.json's verify hook in webhook.js. No secret configured means
+// accepted: callers warn about that at startup.
+export function metaSignatureValid(req, secret) {
+  if (!secret) return true;
+  const header = req.get('x-hub-signature-256') || '';
+  const expected =
+    'sha256=' + crypto.createHmac('sha256', secret).update(req.rawBody || Buffer.alloc(0)).digest('hex');
+  const a = Buffer.from(header);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }

@@ -7,8 +7,8 @@ import P from 'pino';
 import QRCode from 'qrcode';
 import { db } from './database.js';
 import { useDbAuthState } from './waAuth.js';
-import { isWalkIn } from './utils.js';
-import { makeInboundFilter, rememberId, fromJid, rotateAdvSecret, withAdvSecret } from './waInbound.js';
+import { isWalkIn, rememberId } from './utils.js';
+import { makeInboundFilter, fromJid, rotateAdvSecret, withAdvSecret } from './waInbound.js';
 
 const logger = P({ level: process.env.WHATSAPP_LOG_LEVEL || 'silent' });
 

@@ -5,7 +5,8 @@
 //   node --test src/utils.test.js
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { splitText, formatPrice } from './utils.js';
+import crypto from 'crypto';
+import { splitText, formatPrice, rememberId, metaSignatureValid } from './utils.js';
 
 const LIMIT = 2000;
 const strip = s => s.replace(/\s+/g, '');
@@ -38,4 +39,24 @@ test('ровно по границе не режется', () => {
 test('нефиксированная цена идёт с «от», фиксированная — без', () => {
   assert.equal(formatPrice('800.00', true), `${(800).toLocaleString('ru-RU')} сом`);
   assert.equal(formatPrice(3000, false), `от ${(3000).toLocaleString('ru-RU')} сом`);
+});
+
+test('подпись Meta: верная проходит, чужая и пустая — нет', () => {
+  const rawBody = Buffer.from('{"entry":[]}');
+  const signed = 'sha256=' + crypto.createHmac('sha256', 's3cret').update(rawBody).digest('hex');
+  const req = header => ({ rawBody, get: () => header });
+
+  assert.equal(metaSignatureValid(req(signed), 's3cret'), true);
+  assert.equal(metaSignatureValid(req(signed), 'other-secret'), false);
+  assert.equal(metaSignatureValid(req(''), 's3cret'), false);
+  assert.equal(metaSignatureValid(req(undefined), 's3cret'), false);
+  // Instagram's behaviour today: no secret configured → accepted, warned at startup.
+  assert.equal(metaSignatureValid(req(''), undefined), true);
+});
+
+test('rememberId не даёт набору расти бесконечно и помнит свежие id', () => {
+  const set = new Set();
+  for (let i = 0; i < 1000; i++) rememberId(set, i);
+  assert.ok(set.size <= 500, `size ${set.size}`);
+  assert.ok(set.has(999));
 });

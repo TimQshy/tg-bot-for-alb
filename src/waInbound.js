@@ -4,21 +4,11 @@
 // whatsapp.js wires these into the socket's events.
 import { getContentType, normalizeMessageContent } from '@whiskeysockets/baileys';
 import { randomBytes } from 'crypto';
+import { rememberId } from './utils.js';
 
-const IDS_MAX = 500;
 const IGNORED_CONTENT = new Set(['protocolMessage', 'reactionMessage']);
 // A fromMe echo older than this is history replay, not a live reply.
 export const HUMAN_ECHO_MAX_AGE_MS = 2 * 60 * 1000;
-
-// Bounded: only the last few hundred ids matter, a redelivery or an echo
-// arrives within seconds.
-export function rememberId(set, id) {
-  set.add(id);
-  if (set.size > IDS_MAX) {
-    const oldest = set.values();
-    for (let i = 0; i < IDS_MAX / 5; i++) set.delete(oldest.next().value);
-  }
-}
 
 export function fromJid(jid) {
   return jid.split('@')[0];

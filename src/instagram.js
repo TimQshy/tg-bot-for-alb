@@ -13,11 +13,10 @@
 // Deliberately separate from the WhatsApp booking flow: no FSM, no session,
 // no reminders. Instagram's 24-hour messaging window makes proactive
 // messages impossible anyway, so bookings stay on WhatsApp.
-import crypto from 'crypto';
 import express from 'express';
 import { db } from './database.js';
 import { botEnabled } from './botState.js';
-import { splitText } from './utils.js';
+import { splitText, metaSignatureValid } from './utils.js';
 import { answerQuestion } from './igAi.js';
 
 const GRAPH = 'https://graph.instagram.com/v21.0';
@@ -175,20 +174,6 @@ async function handleMessage(event) {
   console.log(`[ig] dm to ${senderId} ${res.ok ? `sent (${parts.length} msg)` : `failed: ${res.body}`}`);
 }
 
-// Meta signs every delivery with the app secret. Needs the exact bytes that
-// were sent, hence the rawBody captured by express.json's verify hook in
-// webhook.js.
-function signatureValid(req) {
-  const secret = process.env.IG_APP_SECRET;
-  if (!secret) return true; // enabled without a secret: warned about at startup
-  const header = req.get('x-hub-signature-256') || '';
-  const expected =
-    'sha256=' + crypto.createHmac('sha256', secret).update(req.rawBody || Buffer.alloc(0)).digest('hex');
-  const a = Buffer.from(header);
-  const b = Buffer.from(expected);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
-
 // Only one salon uses Instagram; the rest run the same image with these
 // variables unset, and for them the webhook route is never mounted at all.
 export const instagramEnabled = Boolean(process.env.IG_VERIFY_TOKEN);
@@ -204,7 +189,7 @@ instagramRouter.get('/', (req, res) => {
 });
 
 instagramRouter.post('/', (req, res) => {
-  if (!signatureValid(req)) {
+  if (!metaSignatureValid(req, process.env.IG_APP_SECRET)) {
     console.warn('[ig] bad signature, dropping delivery');
     return res.sendStatus(403);
   }
