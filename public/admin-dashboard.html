@@ -1231,6 +1231,15 @@ async function loadWaStatus() {
     return;
   }
 
+  // Cloud API salons have no QR to scan — the connection is Meta's token.
+  if (wa.transport === 'cloud') {
+    card.innerHTML = wa.status === 'open'
+      ? '<h2><span class="wa-dot" style="background:#25C168"></span>Подключён</h2>' +
+        '<p>Подключено через WhatsApp Cloud API.</p>'
+      : '<h2><span class="wa-dot" style="background:#E5A400"></span>Cloud API: ошибка доступа</h2>' +
+        '<p>Проверьте токен WA_ACCESS_TOKEN в настройках салона.</p>';
+    return;
+  }
   if (wa.status === 'open') {
     card.innerHTML = '<h2><span class="wa-dot" style="background:#25C168"></span>Подключён</h2>' +
       '<p>Бот работает с номером этого салона.</p>';

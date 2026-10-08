@@ -53,8 +53,8 @@ function requireSystemAdmin(req, res, next) {
 // and scanning a fresh one drops the session that is running, so the screen
 // says so in as many words.
 adminRouter.get('/api/wa-status', (_req, res) => {
-  const { status, qrDataUrl } = getWaStatus();
-  res.json({ salon: process.env.SALON_SLUG, status, qrDataUrl });
+  const { status, qrDataUrl, transport } = getWaStatus();
+  res.json({ salon: process.env.SALON_SLUG, status, qrDataUrl, transport });
 });
 
 // ── Emergency switch ─────────────────────────────────────────────────────
