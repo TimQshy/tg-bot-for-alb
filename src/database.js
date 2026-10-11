@@ -815,6 +815,22 @@ export const db = {
     return rows[0].at;
   },
 
+  // The tail of one chat, oldest first. Gives the agent the context of
+  // everything the bot said outside its own loop — menu steps, reminders,
+  // an admin's manual replies — and survives a restart.
+  async getRecentMessages(phone, { withinMinutes = 360, limit = 12 } = {}) {
+    const { rows } = await pool.query(
+      `SELECT direction, text FROM (
+         SELECT direction, text, created_at, id FROM messages
+          WHERE phone=$1 AND text IS NOT NULL
+            AND created_at > NOW() - ($2 || ' minutes')::interval
+          ORDER BY created_at DESC, id DESC LIMIT $3
+       ) t ORDER BY created_at, id`,
+      [phone, String(withinMinutes), limit]
+    );
+    return rows;
+  },
+
   async getInboundMessageTexts() {
     const { rows } = await pool.query(
       `SELECT text FROM messages WHERE direction='in' AND text IS NOT NULL ORDER BY created_at`

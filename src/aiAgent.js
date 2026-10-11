@@ -27,7 +27,7 @@ import {
 // never disagree about whether November is open. The rest is how much of the
 // conversation it remembers.
 const CALENDAR_DAYS = 14;
-const HISTORY_MAX = 16; // user+assistant messages, tool traffic excluded
+const HISTORY_MAX = 10; // turns: one client message plus everything up to its reply
 const HISTORY_TTL_MS = 30 * 60 * 1000;
 const MAX_TOOL_ROUNDS = 6;
 const MAX_TIMES_LISTED = 24;
@@ -40,21 +40,56 @@ export const agentEnabled = () =>
 // appointments are in Postgres either way. Only user/assistant turns are
 // kept — tool calls and their results are re-derived each turn from live
 // data, so a stale "10:00 свободно" can never be replayed as fact.
+//
+// Exception: the last TOOL_TURNS_KEPT turns keep their tool calls and results.
+// Without them "а 21 и 22 во сколько?" arrives with no trace of which service,
+// master and dates the previous answer was built on, and the model re-guesses
+// them. Older turns are reduced to text, and create_booking re-validates any
+// time against live data anyway.
 const histories = new Map();
+const TOOL_TURNS_KEPT = 2;
 
-function getHistory(phone) {
+function getTurns(phone) {
   const h = histories.get(phone);
-  if (!h) return [];
+  if (!h) return null;
   if (Date.now() - h.updatedAt > HISTORY_TTL_MS) {
     histories.delete(phone);
-    return [];
+    return null;
   }
-  return h.messages;
+  return h.turns;
 }
 
-function pushHistory(phone, messages) {
-  const next = [...getHistory(phone), ...messages].slice(-HISTORY_MAX);
-  histories.set(phone, { messages: next, updatedAt: Date.now() });
+const isToolTraffic = m => m.role === 'tool' || (m.role === 'assistant' && m.tool_calls?.length);
+
+function getHistory(phone) {
+  const turns = getTurns(phone) || [];
+  return turns.flatMap((turn, i) =>
+    i >= turns.length - TOOL_TURNS_KEPT ? turn : turn.filter(m => !isToolTraffic(m))
+  );
+}
+
+function pushTurn(phone, turn) {
+  const next = [...(getTurns(phone) || []), turn].slice(-HISTORY_MAX);
+  histories.set(phone, { turns: next, updatedAt: Date.now() });
+}
+
+// Memory is empty after a restart, after 30 quiet minutes, and for anything
+// that happened outside the agent (menu booking, reminder, admin reply). The
+// message log has all of it, so seed from there — otherwise a "👍" after a
+// reminder gets a fresh "Здравствуйте! Чем могу помочь?".
+async function seedHistory(phone, userText) {
+  if (getTurns(phone)) return;
+  try {
+    const rows = (await db.getRecentMessages?.(phone)) || [];
+    // The incoming message is already logged by the webhook; it is added
+    // again as this turn's user message.
+    const last = rows[rows.length - 1];
+    if (last && last.direction === 'in' && last.text === userText) rows.pop();
+    const turn = rows.map(r => ({ role: r.direction === 'in' ? 'user' : 'assistant', content: r.text }));
+    if (turn.length) histories.set(phone, { turns: [turn], updatedAt: Date.now() });
+  } catch (err) {
+    console.warn('[agent] history seed failed:', err.message);
+  }
 }
 
 export function clearHistory(phone) {
@@ -160,6 +195,12 @@ async function buildSystemPrompt(phone) {
 - показать его записи: list_my_bookings
 - перенести запись: reschedule_booking
 - отменить запись: cancel_booking${waitlistOn ? '\n- поставить в лист ожидания, если на нужную дату нет времени: join_waitlist' : ''}
+
+ПАМЯТЬ РАЗГОВОРА
+Выше в диалоге — вся недавняя переписка с этим клиентом, включая то, что писал бот-меню и напоминания. Ты продолжаешь разговор, а не начинаешь его заново.
+- Не здоровайся повторно и не спрашивай «чем могу помочь», если в переписке уже есть сообщения. На «👍», «спасибо», «ок» ответь коротко по смыслу (или одним словом) без нового приветствия.
+- Если клиент говорит «а 21 и 22?», «во сколько?», «тогда на второе» — это про услугу, мастера и даты, которые уже обсуждались. Бери их из переписки и прошлых результатов инструментов, не переспрашивай и не придумывай заново. Для актуального времени всё равно вызови check_availability на эти даты.
+- Не противоречь своим прошлым ответам: если ты назвал дату свободной, а проверка показала иное — скажи об этом прямо.
 
 ПРАВИЛА РАБОТЫ
 1. Никогда не выдумывай услуги, мастеров, цены, даты и свободное время. Свободное время называй ТОЛЬКО из ответа check_availability или find_dates.
@@ -560,8 +601,10 @@ export async function runAgent(phone, userText) {
 
   const system = await buildSystemPrompt(phone);
   const tools = (await waitlistEnabled()) ? TOOLS : TOOLS.filter(t => t.function.name !== 'join_waitlist');
-  const turn = [{ role: 'user', content: userText }];
-  const messages = [{ role: 'system', content: system }, ...getHistory(phone), ...turn];
+  await seedHistory(phone, userText);
+  const history = getHistory(phone);
+  const messages = [{ role: 'system', content: system }, ...history, { role: 'user', content: userText }];
+  const turnStart = messages.length - 1;
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -572,7 +615,7 @@ export async function runAgent(phone, userText) {
       if (!calls.length) {
         const answer = (message.content || '').trim();
         if (!answer) return null;
-        pushHistory(phone, [...turn, { role: 'assistant', content: answer }]);
+        pushTurn(phone, messages.slice(turnStart));
         return answer;
       }
 

@@ -34,10 +34,13 @@ const rescheduled = [];
 // Scripted DeepSeek turns: each call to chat() shifts one off.
 let replies = [];
 const sent = [];
+let fullMessages = [];
+let loggedMessages = [];
 
 mock.module('./ai.js', {
   namedExports: {
     chat: async ({ messages }) => {
+      fullMessages = [...messages];
       sent.push(messages.at(-1));
       const next = replies.shift();
       if (!next) throw new Error('no scripted reply left');
@@ -57,6 +60,7 @@ mock.module('./database.js', {
       getUser: async () => ({ id: CLIENT, name: 'Айнура' }),
       setUserNameIfUnknown: async () => {},
       getUserAppointments: async () => [],
+      getRecentMessages: async () => [...loggedMessages],
       getAppointmentById: async id =>
         id === 42
           ? {
@@ -288,4 +292,35 @@ test('на дату есть свободное время — в очередь
 
   assert.equal(joined.length, 0);
   assert.deepEqual(lastToolResult().free, ['10:00', '15:00']);
+});
+
+test('следующий ход видит результаты инструментов прошлого хода', async () => {
+  clearHistory(CLIENT);
+  replies = [
+    toolCall('find_dates', { service_id: SERVICE.id }),
+    answer('Есть 21 и 22 октября.'),
+  ];
+  await runAgent(CLIENT, 'когда свободно?');
+
+  replies = [answer('21 — 10:00 и 15:00.')];
+  await runAgent(CLIENT, '21 и 22 во сколько?');
+
+  assert.ok(fullMessages.some(m => m.role === 'tool'), 'результат find_dates потерян');
+  assert.ok(fullMessages.some(m => m.tool_calls?.[0]?.function.name === 'find_dates'));
+});
+
+test('после рестарта память берётся из лога сообщений, без дубля входящего', async () => {
+  clearHistory(CLIENT);
+  loggedMessages = [
+    { direction: 'out', text: 'Напоминание: у вас запись завтра' },
+    { direction: 'in', text: '👍' },
+  ];
+  replies = [answer('Ждём вас!')];
+
+  await runAgent(CLIENT, '👍');
+  loggedMessages = [];
+
+  const history = fullMessages.slice(1);
+  assert.deepEqual(history.map(m => m.role), ['assistant', 'user']);
+  assert.match(history[0].content, /Напоминание/);
 });
