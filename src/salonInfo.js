@@ -3,6 +3,7 @@
 // identical wherever a booking is confirmed: the numbered flow, the AI agent,
 // the waitlist offer and an appointment the admin creates by hand.
 import { db } from './database.js';
+import { todayStr, addDays } from './utils.js';
 
 export const SETTING_KEYS = ['address', 'address_note', 'map_url'];
 
@@ -46,4 +47,44 @@ export async function getBookingHorizonDays() {
   return values[HORIZON_KEY] === undefined
     ? DEFAULT_HORIZON_DAYS
     : normalizeHorizon(values[HORIZON_KEY]);
+}
+
+// A date from which client booking is held shut until that day comes — "на
+// ноябрь запись откроется 1 ноября". Before it, every date on or after it is
+// off limits to the bot, the consultant and the waitlist alike; from that day
+// on the gate is inert by itself, so nobody has to remember to clear it. The
+// panel is not held by it, same as with the horizon.
+export const OPENS_ON_KEY = 'booking_opens_on';
+
+const MONTHS_NOM = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+  'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+export const isIsoDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+
+// What the client is told. A gate on the 1st reads as a whole month opening,
+// which is how salons announce it; any other day is named as a date.
+export function gateMessage(opensOn) {
+  const [, m, d] = opensOn.split('-').map(Number);
+  const when = `${d} ${MONTHS_GEN[m - 1]}`;
+  return d === 1
+    ? `Запись на ${MONTHS_NOM[m - 1]} откроется ${when}`
+    : `Запись на даты с ${when} откроется ${when}`;
+}
+
+// null when nothing is held shut today.
+export async function getBookingGate(today = todayStr()) {
+  const opensOn = (await db.getSettings())[OPENS_ON_KEY];
+  if (!isIsoDate(opensOn) || today >= opensOn) return null;
+  return { opensOn, lastOpenDate: addDays(opensOn, -1), message: gateMessage(opensOn) };
+}
+
+// How many days ahead a client can book right now: the horizon, cut short at
+// the gate while it is shut. Can be 0 — today is the last open date.
+export async function getBookableDays(today = todayStr()) {
+  const [horizon, gate] = await Promise.all([getBookingHorizonDays(), getBookingGate(today)]);
+  if (!gate) return horizon;
+  const toGate = Math.round((Date.parse(gate.lastOpenDate) - Date.parse(today)) / 86400000);
+  return Math.max(0, Math.min(horizon, toGate));
 }

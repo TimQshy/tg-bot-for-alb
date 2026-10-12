@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Админка салона</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <link rel="manifest" href="/admin/manifest.json">
 <meta name="theme-color" content="#1D6A4C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -63,7 +63,9 @@
 }
 *,*::before,*::after{box-sizing:border-box}
 [hidden]{display:none !important}
-html{-webkit-text-size-adjust:100%;overflow-x:hidden}
+/* Экран не масштабируется: ни щипком, ни двойным тапом, ни фокусом в поле
+   (iOS приближает поле со шрифтом меньше 16px — поэтому поля 16px). */
+html{-webkit-text-size-adjust:100%;overflow-x:hidden;touch-action:pan-x pan-y}
 body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font-ui);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none;overflow-x:hidden;width:100%}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;background:none;border:0}
@@ -82,7 +84,7 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
 .iconbtn{width:var(--tap);height:var(--tap);display:grid;place-items:center;border-radius:12px;color:var(--ink-2)}
 .iconbtn:active{background:var(--surface-2)}
 .iconbtn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.salonpick{max-width:190px;height:38px;padding:0 10px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px;font-weight:500}
+.salonpick{max-width:190px;height:38px;padding:0 10px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-size:16px;font-weight:500}
 .wa-card{padding:26px 20px;text-align:center}
 .wa-card h2{margin:0 0 6px;font-size:19px;letter-spacing:-.02em}
 .wa-card p{margin:0;color:var(--ink-2);font-size:14px;line-height:1.5}
@@ -191,19 +193,22 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
 .switch[aria-checked="true"]{background:var(--accent)}
 .switch[aria-checked="true"]::after{transform:translateX(18px)}
 .timepair{display:flex;align-items:center;gap:6px}
-.timeinput{min-height:38px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface-2);font-family:var(--font-num);font-size:14px;font-variant-numeric:tabular-nums}
+.timeinput{min-height:38px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface-2);font-family:var(--font-num);font-size:16px;font-variant-numeric:tabular-nums}
 .timepair span{color:var(--ink-3)}
 .hoursrow{display:flex;align-items:center;gap:12px;min-height:64px;padding:12px 14px;border-bottom:1px solid var(--line)}
 .hoursrow:last-child{border-bottom:0}
 .hoursrow__day{width:36px;font-weight:500;font-size:14.5px}
 .hoursrow--off .timepair{opacity:.4;pointer-events:none}
 .hoursrow__off{font-size:13px;color:var(--ink-3)}
-.scrim{position:fixed;inset:0;z-index:40;background:rgba(30,18,23,.45);backdrop-filter:blur(2px)}
+.scrim{position:fixed;inset:0;z-index:40;background:rgba(30,18,23,.45);backdrop-filter:blur(2px);touch-action:none}
+/* Пока открыта шторка, страница под ней стоит на месте. overflow:hidden на
+   body iOS не останавливает — фиксируем body на текущей прокрутке. */
+body.is-locked{position:fixed;left:0;right:0;overflow:hidden}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;max-height:88dvh;display:flex;flex-direction:column;background:var(--surface);border-radius:22px 22px 0 0;box-shadow:var(--shadow-sheet);padding-bottom:var(--safe-b)}
 .sheet__grab{width:36px;height:4px;border-radius:2px;background:var(--line-strong);margin:8px auto 0;flex:0 0 auto}
 .sheet__head{display:flex;align-items:center;gap:10px;padding:12px 16px 10px;border-bottom:1px solid var(--line);flex:0 0 auto}
 .sheet__title{font-family:var(--font-head);font-size:17px;font-weight:700;letter-spacing:-.02em;flex:1}
-.sheet__body{padding:14px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.sheet__body{padding:14px 16px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .sheet__foot{padding:12px 16px 16px;border-top:1px solid var(--line);flex:0 0 auto;display:grid;grid-template-columns:1fr 1.4fr;gap:10px}
 /* Та же шторка, но приезжает сверху — из-под иконки, которая её открыла. */
 .sheet--top{top:0;bottom:auto;border-radius:0 0 22px 22px;padding-top:var(--safe-t);padding-bottom:8px;box-shadow:0 8px 40px rgba(24,34,32,.16)}
@@ -226,8 +231,13 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .slot[aria-pressed="true"]{color:#0E1513}}
 .field{display:block;margin-bottom:14px}
 .field__label{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:6px}
-.input{width:100%;min-height:46px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);font-size:15px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.input{display:block;width:100%;min-width:0;max-width:100%;min-height:46px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);font-size:16px}
+/* iOS рисует date/time своим контролом с собственной минимальной шириной —
+   он вылезал за край шторки. Снимаем родной вид и прижимаем текст влево. */
+.input[type=date],.input[type=time]{-webkit-appearance:none;appearance:none;text-align:left;line-height:44px}
+.input::-webkit-date-and-time-value{text-align:left;margin:0}
+.field,.grid2>*{min-width:0}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 
 /* ── Часы работы: неделя / календарь / редактор дня ─────────────────── */
 .seg{display:flex;gap:4px;padding:4px;background:var(--surface-2);border-radius:var(--r-pill);margin:0 0 14px}
@@ -766,6 +776,8 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
       <button class="switch" role="switch" id="blkAllDay" aria-checked="false"></button>
       <span class="field__label" style="margin:0">Весь день</span>
     </label>
+    <label class="field" id="blkToField"><span class="field__label">По (включительно, необязательно)</span>
+      <input class="input" type="date" id="blkDateTo"></label>
     <div class="grid2" id="blkTimes">
       <label class="field"><span class="field__label">С</span><input class="input" type="time" id="blkFrom"></label>
       <label class="field"><span class="field__label">До</span><input class="input" type="time" id="blkTill"></label>
@@ -790,6 +802,10 @@ h1,h2,h3{margin:0;font-family:var(--font-head);font-weight:700;letter-spacing:-.
     <label class="field"><span class="field__label">Открыто дней вперёд</span>
       <input class="input" type="number" id="setHorizon" min="1" max="365" inputmode="numeric"></label>
     <p class="hint">Бот показывает даты в пределах этого окна и листает их кнопкой «Ещё даты». Консультант дальше этого окна тоже не записывает. Вас это не ограничивает — из панели запись создаётся на любую дату.</p>
+    <label class="field" style="margin-top:18px"><span class="field__label">Запись откроется (необязательно)</span>
+      <input class="input" type="date" id="setOpensOn"></label>
+    <p class="hint">До этого дня клиенты не запишутся на него и на даты позже. Бот отвечает: <b id="setOpensOnPreview">«Запись на ноябрь откроется 1 ноября»</b>. В этот день ограничение снимется само. Оставьте пустым, если не нужно.</p>
+    <button class="btn btn--ghost" id="setOpensOnClear" type="button" style="min-height:34px;padding:0 12px">Без даты открытия</button>
     <p class="hint" id="setHorizonMsg"></p>
   </div>
   <div class="sheet__foot">
@@ -1029,6 +1045,7 @@ function goto(name) {
   const tab = name === 'master' ? 'mastera' : name;
   document.querySelectorAll('[data-goto]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.goto === tab)));
   window.scrollTo({ top: 0 });
+  rememberScreen(name);
   // The FAB creates an appointment, so it only belongs on the bookings
   // screen — elsewhere it just sits on top of the content.
   document.getElementById('fabAdd').hidden = name !== 'zapisi';
@@ -1063,14 +1080,30 @@ function renderSettingsRows() {
   const days = state.settings.booking_horizon_days ?? 60;
   document.getElementById('rowAddressSub').textContent =
     state.settings.address || 'не заполнен';
+  const opens = state.settings.booking_opens_on;
   document.getElementById('rowHorizonSub').textContent =
-    `${days} ${plural(days, 'день', 'дня', 'дней')} вперёд`;
+    `${days} ${plural(days, 'день', 'дня', 'дней')} вперёд` +
+    (opens && opens > todayISO() ? ` · откроется ${fmtDayShort(opens)}` : '');
+}
+// Тот же текст, что пишет бот (salonInfo.gateMessage).
+const MONTHS_NOM = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+const MONTHS_GEN_RU = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+function gateMessage(opensOn) {
+  const [, m, d] = opensOn.split('-').map(Number);
+  const when = `${d} ${MONTHS_GEN_RU[m - 1]}`;
+  return d === 1 ? `Запись на ${MONTHS_NOM[m - 1]} откроется ${when}` : `Запись на даты с ${when} откроется ${when}`;
+}
+function renderOpensOnPreview() {
+  const v = document.getElementById('setOpensOn').value;
+  document.getElementById('setOpensOnPreview').textContent = `«${gateMessage(v || '2026-11-01')}»`;
 }
 // Both sheets edit a copy: «Отмена» must leave the saved settings alone, so
 // the fields are refilled from state every time the sheet opens.
 function fillSettingsFields() {
   const s = state.settings;
   document.getElementById('setHorizon').value = s.booking_horizon_days ?? 60;
+  document.getElementById('setOpensOn').value = s.booking_opens_on || '';
+  renderOpensOnPreview();
   document.getElementById('setHorizonMsg').textContent = '';
   document.getElementById('setAddress').value = s.address || '';
   document.getElementById('setAddressNote').value = s.address_note || '';
@@ -1136,6 +1169,8 @@ async function loadBlocks() {
 function syncBlockAllDay() {
   const all = document.getElementById('blkAllDay').getAttribute('aria-checked') === 'true';
   document.getElementById('blkTimes').hidden = all;
+  // Период из нескольких дней — только целыми днями.
+  document.getElementById('blkToField').hidden = !all;
 }
 document.getElementById('blkAllDay').addEventListener('click', function () {
   this.setAttribute('aria-checked', String(this.getAttribute('aria-checked') !== 'true'));
@@ -1143,6 +1178,7 @@ document.getElementById('blkAllDay').addEventListener('click', function () {
 });
 document.getElementById('rowBlocks').addEventListener('click', async () => {
   document.getElementById('blkDate').value = state.date || todayISO();
+  document.getElementById('blkDateTo').value = '';
   document.getElementById('blkAllDay').setAttribute('aria-checked', 'false');
   document.getElementById('blkFrom').value = '';
   document.getElementById('blkTill').value = '';
@@ -1158,15 +1194,18 @@ document.getElementById('blkAddBtn').addEventListener('click', async () => {
   const allDay = document.getElementById('blkAllDay').getAttribute('aria-checked') === 'true';
   const startTime = document.getElementById('blkFrom').value;
   const endTime = document.getElementById('blkTill').value;
+  const dateTo = allDay ? document.getElementById('blkDateTo').value || date : date;
 
   if (!date) { msg.textContent = 'Выберите дату'; return; }
+  if (dateTo < date) { msg.textContent = '«По» раньше начальной даты'; return; }
   if (!allDay && (!startTime || !endTime)) { msg.textContent = 'Укажите, с какого и до какого часа'; return; }
 
   try {
     const block = await api('/api/salon-blocks', { method: 'POST', body: JSON.stringify({
-      date, allDay, startTime, endTime, note: document.getElementById('blkNote').value.trim(),
+      date, dateTo, allDay, startTime, endTime, note: document.getElementById('blkNote').value.trim(),
     }) });
     document.getElementById('blkNote').value = '';
+    document.getElementById('blkDateTo').value = '';
     await loadBlocks();
     // Записи в закрытые часы не отменяются сами — салон должен увидеть, с кем
     // ему теперь разбираться.
@@ -1174,7 +1213,7 @@ document.getElementById('blkAddBtn').addEventListener('click', async () => {
     msg.textContent = hit
       ? `Часы закрыты. В них уже ${hit} ${plural(hit, 'запись', 'записи', 'записей')} — их придётся перенести вручную.`
       : '';
-    toast('Часы закрыты');
+    toast(block.count > 1 ? `Закрыто дней: ${block.count}` : 'Часы закрыты');
     if (!document.getElementById('screen-zapisi').hidden) loadAppointments();
   } catch (e) {
     msg.textContent = e?.message || 'Не получилось закрыть';
@@ -1199,16 +1238,23 @@ document.getElementById('setSaveBtn').addEventListener('click', async () => {
   } catch { msg.textContent = 'Не получилось сохранить'; }
 });
 
+document.getElementById('setOpensOn').addEventListener('input', renderOpensOnPreview);
+document.getElementById('setOpensOnClear').addEventListener('click', () => {
+  document.getElementById('setOpensOn').value = '';
+  renderOpensOnPreview();
+});
 document.getElementById('setHorizonSaveBtn').addEventListener('click', async () => {
   const msg = document.getElementById('setHorizonMsg');
   const days = parseInt(document.getElementById('setHorizon').value, 10);
+  const opensOn = document.getElementById('setOpensOn').value;
   if (!Number.isFinite(days) || days < 1 || days > 365) {
     msg.textContent = 'От 1 до 365 дней';
     return;
   }
   try {
-    await api('/api/settings', { method: 'PUT', body: JSON.stringify({ booking_horizon_days: days }) });
+    await api('/api/settings', { method: 'PUT', body: JSON.stringify({ booking_horizon_days: days, booking_opens_on: opensOn }) });
     state.settings.booking_horizon_days = days;
+    state.settings.booking_opens_on = opensOn;
     renderSettingsRows();
     msg.textContent = '';
     closeSheet();
@@ -1734,10 +1780,33 @@ document.getElementById('invList').addEventListener('click', async (e) => {
 
 // ── Sheets ─────────────────────────────────────────────────────────────
 let scrim = null;
+let lockedScrollY = null;
+function lockScroll() {
+  if (lockedScrollY !== null) return;
+  lockedScrollY = window.scrollY;
+  document.body.style.top = `-${lockedScrollY}px`;
+  document.body.classList.add('is-locked');
+}
+function unlockScroll() {
+  if (lockedScrollY === null) return;
+  document.body.classList.remove('is-locked');
+  document.body.style.top = '';
+  window.scrollTo(0, lockedScrollY);
+  lockedScrollY = null;
+}
+// A drag that starts on the sheet's head, or inside a body with nothing left
+// to scroll, would otherwise hand the gesture to the page behind on iOS.
+document.addEventListener('touchmove', e => {
+  if (lockedScrollY === null) return;
+  const body = e.target.closest('.sheet__body');
+  if (!body || body.scrollHeight <= body.clientHeight) e.preventDefault();
+}, { passive: false });
+
 function closeSheet() {
   document.querySelectorAll('.sheet').forEach(s => s.hidden = true);
   if (scrim) { scrim.remove(); scrim = null; }
-  document.body.style.overflow = '';
+  unlockScroll();
+  onSheetsClosed();
 }
 function openSheet(id) {
   const s = document.getElementById(id);
@@ -1748,7 +1817,7 @@ function openSheet(id) {
   scrim.addEventListener('click', closeSheet);
   document.body.appendChild(scrim);
   s.hidden = false;
-  document.body.style.overflow = 'hidden';
+  lockScroll();
 }
 document.addEventListener('click', e => {
   const open = e.target.closest('[data-sheet]');
@@ -3351,6 +3420,76 @@ async function initAuth() {
   return true;
 }
 
+// ── Где остановились ────────────────────────────────────────────────────
+// Открытая вкладка переживает перезапуск приложения (localStorage), а при
+// автообновлении — ещё и место на странице (sessionStorage), чтобы
+// обновление не выкидывало на «Записи» и в начало списка.
+const VIEW_KEY = 'admin-screen';
+const RELOAD_KEY = 'admin-reload-view';
+let currentScreen = 'zapisi';
+function rememberScreen(name) {
+  currentScreen = name;
+  // Карточка мастера открывается по id из списка — вернёмся к списку.
+  try { localStorage.setItem(VIEW_KEY, name === 'master' ? 'mastera' : name); } catch {}
+}
+function restoreView() {
+  let name = null, scrollY = 0;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(RELOAD_KEY) || 'null');
+    sessionStorage.removeItem(RELOAD_KEY);
+    if (saved) ({ name, scrollY } = saved);
+    name = name || localStorage.getItem(VIEW_KEY);
+  } catch {}
+  if (!name || name === 'zapisi' || !document.getElementById('screen-' + name)) return;
+  goto(name);
+  if (scrollY) setTimeout(() => window.scrollTo(0, scrollY), 300);
+}
+
+// ── Автообновление ─────────────────────────────────────────────────────
+// Установленное приложение на телефоне неделями живёт в памяти и само
+// страницу не перезагружает. Поэтому при каждом возвращении в приложение
+// (и раз в 5 минут) спрашиваем у сервера, не сменилась ли страница, — по
+// ETag. Сменилась — перезагружаемся, но не посреди открытой шторки или
+// набора текста: тогда ждём, пока окно закроют.
+const UPDATE_EVERY_MS = 5 * 60 * 1000;
+let pageVersion = null;
+let updateReady = false;
+async function fetchPageVersion() {
+  const r = await fetch(location.pathname, { method: 'HEAD', cache: 'no-store' });
+  if (!r.ok) return null;
+  return r.headers.get('etag') || r.headers.get('last-modified');
+}
+const anySheetOpen = () => !!document.querySelector('.sheet:not([hidden])');
+const isTyping = () => !!document.activeElement?.matches('input, textarea, select');
+function applyUpdate() {
+  if (anySheetOpen() || isTyping()) return false;
+  try {
+    sessionStorage.setItem(RELOAD_KEY, JSON.stringify({ name: currentScreen, scrollY: window.scrollY }));
+  } catch {}
+  location.reload();
+  return true;
+}
+async function checkForUpdate() {
+  let v = null;
+  try { v = await fetchPageVersion(); } catch { return; }
+  if (!v) return;
+  if (pageVersion === null) { pageVersion = v; return; }
+  if (v === pageVersion || updateReady) return;
+  updateReady = true;
+  if (!applyUpdate()) toast('Вышло обновление — применится, когда закроете окно');
+}
+// Вызывается из closeSheet. Через паузу: openSheet тоже закрывает прошлую
+// шторку перед тем как открыть новую, это не повод перезагружаться.
+function onSheetsClosed() {
+  if (updateReady) setTimeout(applyUpdate, 400);
+}
+document.addEventListener('focusout', () => { if (updateReady) setTimeout(applyUpdate, 400); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkForUpdate();
+});
+setInterval(checkForUpdate, UPDATE_EVERY_MS);
+checkForUpdate();
+
 // ── Init ───────────────────────────────────────────────────────────────
 (async function init() {
   try {
@@ -3391,8 +3530,14 @@ async function initAuth() {
     document.querySelectorAll('[data-goto="instagram"], #screen-instagram').forEach(el => el.remove());
   }
 
+  restoreView();
+
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/admin/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/admin/sw.js', { updateViaCache: 'none' })
+      .then(reg => document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      }))
+      .catch(() => {});
   }
 })();
 </script>

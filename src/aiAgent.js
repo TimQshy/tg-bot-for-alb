@@ -15,7 +15,9 @@ import {
   cancelAppointmentFor,
   rescheduleAppointmentFor,
 } from './booking.js';
-import { addressMessage, getSalonInfo, getBookingHorizonDays, HORIZON_MAX } from './salonInfo.js';
+import {
+  addressMessage, getSalonInfo, getBookingHorizonDays, getBookableDays, getBookingGate, HORIZON_MAX,
+} from './salonInfo.js';
 import { join as joinWaitlist, waitlistEnabled } from './waitlist.js';
 import {
   todayStr, addDays, formatDateFull, formatPrice,
@@ -129,13 +131,14 @@ function calendarText() {
 }
 
 async function buildSystemPrompt(phone) {
-  const [services, masters, appts, user, salon, horizonDays] = await Promise.all([
+  const [services, masters, appts, user, salon, horizonDays, gate] = await Promise.all([
     db.getActiveServices(),
     db.getActiveMasters(),
     db.getUserAppointments(phone),
     db.getUser(phone),
     getSalonInfo(),
-    getBookingHorizonDays(),
+    getBookableDays(),
+    getBookingGate(),
   ]);
   const waitlistOn = await waitlistEnabled();
 
@@ -210,7 +213,8 @@ async function buildSystemPrompt(phone) {
 5. После успешной записи/переноса/отмены подтверди одним коротким сообщением с датой, временем, мастером и номером записи (#id). Адрес после записи бот отправляет сам отдельным сообщением — не дублируй его в подтверждении.
 6. Если клиент не знает имени, спроси его имя ДО записи и передай в create_booking параметром client_name${knownName ? ' (сейчас клиент записан как «' + knownName + '» — переспрашивать не надо)' : ''}.
 7. Вопросы не про салон (услуги, цены, мастера, запись) — вежливо скажи, что помогаешь только с этим.
-8. Работаешь с датами не дальше чем на ${horizonDays} дней вперёд. Прошедшие даты не предлагай.
+8. Работаешь с датами не дальше чем на ${horizonDays} дней вперёд. Прошедшие даты не предлагай.${gate ? `
+   Запись на ${gate.opensOn} и позже пока закрыта. Если клиент просит такую дату, ответь: «${gate.message}» — и предложи свободное время до ${gate.lastOpenDate}, если ему подходит. Не записывай и не ставь в лист ожидания на эти даты.` : ''}
 9. У некоторых услуг есть ограничения (окно начала, занятость мастера на весь день) — они указаны в списке услуг. Если клиент просит время вне окна, объясни правило простыми словами («сложное окрашивание длится долго, поэтому начинаем только утром») и предложи подходящие варианты из check_availability.
 
 ${salon.address ? `САЛОН
@@ -348,11 +352,17 @@ const TOOLS = [
 // ── Tool implementations ───────────────────────────────────────────────────
 const isPastDate = date => date < todayStr();
 
-// The salon's booking horizon, as a check rather than a hint: the prompt says
+// The salon's booking window, as a check rather than a hint: the prompt says
 // how far ahead it may work, this is what stops it when it forgets. The panel
 // is deliberately not limited this way — the salon books whatever it likes.
-async function beyondHorizon(date) {
-  return date > addDays(todayStr(), await getBookingHorizonDays());
+// Returns the reason the client is told, or null when the date is open.
+async function bookingClosed(date) {
+  const gate = await getBookingGate();
+  if (gate && date >= gate.opensOn) return gate.message;
+  if (date > addDays(todayStr(), await getBookingHorizonDays())) {
+    return 'На эту дату запись ещё не открыта — она слишком далеко';
+  }
+  return null;
 }
 
 async function slotsFor(masterId, date, service, { includeBusy = false, excludeApptId = null } = {}) {
@@ -372,7 +382,8 @@ async function toolCheckAvailability({ date, service_id, master_id }) {
   if (!service) return { error: 'Услуга не найдена' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { error: 'Дата должна быть в формате YYYY-MM-DD' };
   if (isPastDate(date)) return { error: 'Эта дата уже прошла' };
-  if (await beyondHorizon(date)) return { error: 'На эту дату запись ещё не открыта — она слишком далеко' };
+  const closed = await bookingClosed(date);
+  if (closed) return { error: closed };
 
   const masters = await mastersFor(service, master_id);
   if (!masters.length) return { error: 'Нет мастеров для этой услуги' };
@@ -401,7 +412,7 @@ async function toolFindDates({ service_id, master_id, days, from_date }) {
   // The salon's horizon caps how far a search may run, but only from today:
   // a search starting a month out still gets its own window, it just cannot
   // walk past the horizon's end.
-  const horizonDays = await getBookingHorizonDays();
+  const horizonDays = await getBookableDays();
   const span = Math.min(Math.max(parseInt(days, 10) || 14, 1), HORIZON_MAX);
   const today = todayStr();
   let start = /^\d{4}-\d{2}-\d{2}$/.test(from_date || '') ? from_date : today;
@@ -424,7 +435,12 @@ async function toolFindDates({ service_id, master_id, days, from_date }) {
       });
     }
   }
-  return { service: service.name, from: start, dates };
+  // Said outright, so an empty November reads as "not open yet" to the model
+  // and not as "fully booked".
+  const gate = await getBookingGate();
+  return gate
+    ? { service: service.name, from: start, dates, closed_from: gate.opensOn, closed_note: gate.message }
+    : { service: service.name, from: start, dates };
 }
 
 // Only times the schedule actually offers are bookable: a client asking for
@@ -451,7 +467,8 @@ async function toolCreateBooking(phone, { service_id, master_id, date, start_tim
   if (!master) return { error: 'Мастер не найден' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { error: 'Дата должна быть в формате YYYY-MM-DD' };
   if (isPastDate(date)) return { error: 'Эта дата уже прошла' };
-  if (await beyondHorizon(date)) return { error: 'На эту дату запись ещё не открыта — она слишком далеко' };
+  const closed = await bookingClosed(date);
+  if (closed) return { error: closed };
 
   const slot = await resolveSlot(master_id, date, service, start_time);
   if (slot.error) return slot;
@@ -506,7 +523,8 @@ async function toolRescheduleBooking(phone, { appointment_id, date, start_time }
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { error: 'Дата должна быть в формате YYYY-MM-DD' };
   if (isPastDate(date)) return { error: 'Эта дата уже прошла' };
-  if (await beyondHorizon(date)) return { error: 'На эту дату запись ещё не открыта — она слишком далеко' };
+  const closed = await bookingClosed(date);
+  if (closed) return { error: closed };
 
   const service = await db.getService(appt.service_id);
   // The appointment's own slot must not count as busy when it moves inside
@@ -543,7 +561,8 @@ async function toolJoinWaitlist(phone, { service_id, master_id, date, client_nam
   if (!master) return { error: 'Мастер не найден' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { error: 'Дата должна быть в формате YYYY-MM-DD' };
   if (isPastDate(date)) return { error: 'Эта дата уже прошла' };
-  if (await beyondHorizon(date)) return { error: 'На эту дату запись ещё не открыта — она слишком далеко' };
+  const closed = await bookingClosed(date);
+  if (closed) return { error: closed };
 
   // Free time on the date means there is nothing to wait for — booking it is
   // the answer, and a queue entry behind an empty slot would never fire.

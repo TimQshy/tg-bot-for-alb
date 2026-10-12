@@ -33,6 +33,8 @@ const rescheduled = [];
 
 // Scripted DeepSeek turns: each call to chat() shifts one off.
 let replies = [];
+// The salon's "запись откроется" gate; null — nothing held shut.
+let gate = null;
 const sent = [];
 let fullMessages = [];
 let loggedMessages = [];
@@ -79,6 +81,8 @@ mock.module('./salonInfo.js', {
     getSalonInfo: async () => ({ address: 'ул. Киевская 95', address_note: 'вход со двора', map_url: '' }),
     addressMessage: async () => '📍 Адрес: ул. Киевская 95\nвход со двора',
     getBookingHorizonDays: async () => 60,
+    getBookableDays: async () => (gate ? 1 : 60),
+    getBookingGate: async () => gate,
     HORIZON_MAX: 365,
   },
 });
@@ -323,4 +327,20 @@ test('после рестарта память берётся из лога со
   const history = fullMessages.slice(1);
   assert.deepEqual(history.map(m => m.role), ['assistant', 'user']);
   assert.match(history[0].content, /Напоминание/);
+});
+
+test('дата за закрытым окном записи — отказ с текстом салона, записи нет', async () => {
+  clearHistory(CLIENT);
+  created.length = 0;
+  gate = { opensOn: DATE, lastOpenDate: DATE, message: 'Запись на ноябрь откроется 1 ноября' };
+  replies = [
+    toolCall('create_booking', { service_id: SERVICE.id, master_id: MASTER.id, date: DATE, start_time: '10:00' }),
+    answer('Запись на ноябрь откроется 1 ноября.'),
+  ];
+
+  await runAgent(CLIENT, 'запишите на ноябрь');
+  gate = null;
+
+  assert.equal(created.length, 0);
+  assert.equal(lastToolResult().error, 'Запись на ноябрь откроется 1 ноября');
 });

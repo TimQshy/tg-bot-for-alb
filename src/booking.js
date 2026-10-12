@@ -5,7 +5,7 @@ import { getSession, setSession, clearSession } from './session.js';
 import { formatDateShort, formatDateFull, formatPrice } from './utils.js';
 import { getAvailableDates, getFreeSlotsForService } from './schedule.js';
 import * as waitlist from './waitlist.js';
-import { addressMessage, getBookingHorizonDays } from './salonInfo.js';
+import { addressMessage, getBookableDays, getBookingGate } from './salonInfo.js';
 
 const SLOTS_PAGE_SIZE = 9;
 const MENU_PAGE_SIZE = 9; // + 1 row for "ещё", matches old MAX_LIST_ROWS-1 budget
@@ -98,7 +98,10 @@ async function sendDatesPage(phone) {
   if (!session || session.step !== 'choose_date') return start(phone);
 
   const page = session.datePage || 0;
-  const horizon = await getBookingHorizonDays();
+  // Cut short at the salon's gate while it is shut ("на ноябрь откроется 1
+  // ноября"), and that is said under the list so a missing November reads
+  // as not open yet rather than fully booked.
+  const [horizon, gate] = await Promise.all([getBookableDays(), getBookingGate()]);
   // One past the end of this page, which is what tells us whether to offer
   // "ещё даты" at all.
   const wanted = MENU_PAGE_SIZE * (page + 1) + 1;
@@ -115,7 +118,7 @@ async function sendDatesPage(phone) {
     // Only possible on the first page: "ещё даты" is offered only when a
     // further date is already in hand.
     clearSession(phone);
-    return sendText(phone, `😔 У мастера «${session.masterName}» нет свободных дат в ближайшее время.`);
+    return sendText(phone, `😔 У мастера «${session.masterName}» нет свободных дат в ближайшее время.${gate ? `\n\n${gate.message}.` : ''}`);
   }
 
   const items = pageDates.map(d => ({ id: `dt:${d}`, label: formatDateShort(d) }));
@@ -123,7 +126,9 @@ async function sendDatesPage(phone) {
 
   return sendMenu(
     phone,
-    `💅 ${session.serviceName}\n👩 ${session.masterName}\n\nВыберите дату (ответьте цифрой):`,
+    `💅 ${session.serviceName}\n👩 ${session.masterName}\n\n` +
+      (gate ? `${gate.message}.\n\n` : '') +
+      'Выберите дату (ответьте цифрой):',
     items
   );
 }

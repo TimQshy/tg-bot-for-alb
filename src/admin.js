@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { db } from './database.js';
 import { sendAddress } from './booking.js';
 import {
-  SETTING_KEYS, HORIZON_KEY, HORIZON_MIN, HORIZON_MAX, getBookingHorizonDays,
+  SETTING_KEYS, HORIZON_KEY, HORIZON_MIN, HORIZON_MAX, getBookingHorizonDays, OPENS_ON_KEY, isIsoDate,
 } from './salonInfo.js';
 import { sendText, getWaStatus } from './whatsapp.js';
 import { addDays, formatDateFull, getDayOfWeek, splitText, newWalkInId, todayStr, toMinutes } from './utils.js';
@@ -414,12 +414,17 @@ adminRouter.delete('/api/services/:id', async (req, res) => {
 // Only the keys the bot knows how to use are stored, so the panel can't turn
 // this into a dumping ground.
 adminRouter.get('/api/settings', async (_req, res) => {
+  res.json(await settingsPayload());
+});
+
+async function settingsPayload() {
   const values = await db.getSettings();
-  res.json({
+  return {
     ...Object.fromEntries(SETTING_KEYS.map(k => [k, values[k] || ''])),
     [HORIZON_KEY]: await getBookingHorizonDays(),
-  });
-});
+    [OPENS_ON_KEY]: isIsoDate(values[OPENS_ON_KEY]) ? values[OPENS_ON_KEY] : '',
+  };
+}
 
 adminRouter.put('/api/settings', async (req, res) => {
   const body = req.body || {};
@@ -441,12 +446,16 @@ adminRouter.put('/api/settings', async (req, res) => {
     values[HORIZON_KEY] = String(days);
   }
 
+  // Empty clears the gate; a date that has already come is accepted and is
+  // simply inert, so the field never has to be tidied up by hand.
+  if (OPENS_ON_KEY in body) {
+    const v = body[OPENS_ON_KEY];
+    if (v !== '' && !isIsoDate(v)) return res.status(400).json({ error: 'bad_opens_on' });
+    values[OPENS_ON_KEY] = v;
+  }
+
   await db.setSettings(values);
-  const saved = await db.getSettings();
-  res.json({
-    ...Object.fromEntries(SETTING_KEYS.map(k => [k, saved[k] || ''])),
-    [HORIZON_KEY]: await getBookingHorizonDays(),
-  });
+  res.json(await settingsPayload());
 });
 
 // ── Instagram auto-replies ────────────────────────────────────────────────
@@ -673,6 +682,8 @@ adminRouter.get('/api/salon-blocks', async (req, res) => {
   res.json(await db.listSalonBlocksRange(from, to));
 });
 
+const MAX_BLOCK_DAYS = 62;
+
 adminRouter.post('/api/salon-blocks', async (req, res) => {
   const { date, allDay, note } = req.body || {};
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return res.status(400).json({ error: 'bad_date' });
@@ -686,13 +697,26 @@ adminRouter.post('/api/salon-blocks', async (req, res) => {
     return res.status(400).json({ error: 'bad_range', message: 'Конец должен быть позже начала' });
   }
 
-  const block = await db.createSalonBlock({
-    date, startTime, endTime, note: typeof note === 'string' ? note.trim().slice(0, 120) : null,
-  });
+  // A run of whole days ("закрыты с 1 по 9 ноября") is one row per day, so
+  // each can still be reopened on its own. Capped so a typo in the year
+  // cannot write a thousand rows.
+  const dateTo = req.body?.dateTo || date;
+  if (!isIsoDate(dateTo) || dateTo < date) return res.status(400).json({ error: 'bad_date_to', message: 'Конец периода раньше начала' });
+  const dates = [];
+  for (let d = date; d <= dateTo; d = addDays(d, 1)) {
+    dates.push(d);
+    if (dates.length > MAX_BLOCK_DAYS) {
+      return res.status(400).json({ error: 'range_too_long', message: `Не больше ${MAX_BLOCK_DAYS} дней за раз` });
+    }
+  }
+
+  const cleanNote = typeof note === 'string' ? note.trim().slice(0, 120) : null;
+  const blocks = [];
+  for (const d of dates) blocks.push(await db.createSalonBlock({ date: d, startTime, endTime, note: cleanNote }));
   // Уже записанные клиенты остаются записанными — как и с графиком мастера,
   // отменять за них панель не берётся, только показывает, кого задело.
-  res.json({ ...block, affected: await db.listAppointments({
-    dateFrom: date, dateTo: date, status: 'confirmed',
+  res.json({ ...blocks[0], count: blocks.length, affected: await db.listAppointments({
+    dateFrom: date, dateTo, status: 'confirmed',
   }).then(appts => appts.filter(a =>
     toMinutes(a.start_time) < toMinutes(endTime) && toMinutes(a.end_time) > toMinutes(startTime))) });
 });
