@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Aldynala — визитка</title>
+<!--
+  Source of the printed business card, two sides, 90×50 mm.
+  Each page is 94×54 mm: 2 mm bleed on every side gets trimmed off at the print shop,
+  and the text stays 4 mm inside the cut line (the .safe box).
+  Colors, fonts and logo follow offer.html. Rebuild the PDF: see "Визитка" in business/README.md.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@500&display=block">
+<style>
+@page{size:94mm 54mm;margin:0}
+:root{
+  --bg:#0A100E; --ink-d:#E9F3EF; --ink-d2:rgba(233,243,239,.7); --ink-d3:rgba(233,243,239,.45);
+  --mint:#84DDB7; --mint-deep:#14634A;
+  --ink:#10201A; --ink-2:#4B5D55; --ink-3:#7D8E86;
+  --paper:#F3F7F4; --line:#D6E3DB;
+  --font-head:'Manrope',system-ui,sans-serif;
+  --font-ui:'Onest',system-ui,sans-serif;
+  --font-num:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+html,body{margin:0;padding:0}
+body{background:#fff;font:400 7pt/1.4 var(--font-ui);-webkit-font-smoothing:antialiased}
+p{margin:0}
+.num{font-family:var(--font-num);font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+
+.side{position:relative;width:94mm;height:54mm;overflow:hidden;page-break-after:always;break-after:page}
+.side:last-child{page-break-after:auto;break-after:auto}
+.safe{position:absolute;inset:6mm}
+
+/* Front */
+.front{background:var(--bg);color:var(--ink-d)}
+.front::before{content:"";position:absolute;right:-22mm;top:-30mm;width:80mm;height:80mm;border-radius:50%;background:radial-gradient(closest-side,rgba(132,221,183,.18),rgba(132,221,183,0))}
+.front .safe{display:grid;grid-template-columns:1fr 31mm;gap:4mm}
+.lead{display:flex;flex-direction:column;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:2mm;font:800 10.5pt var(--font-head);letter-spacing:-.03em}
+.brand svg{width:5.5mm;height:5.5mm}
+.lead h1{margin:0;font:800 10.5pt/1.12 var(--font-head);letter-spacing:-.03em}
+.lead h1 em{font-style:normal;color:var(--mint)}
+.kicker{align-self:flex-start;padding:.6mm 2.2mm;border-radius:999px;background:rgba(132,221,183,.12);color:var(--mint);font-size:6pt;font-weight:600}
+
+.chat{position:relative;align-self:center;display:grid;gap:1.6mm}
+.msg{max-width:92%;padding:1.4mm 2mm;border-radius:2.6mm;font-size:5.8pt;line-height:1.35}
+.msg time{display:block;text-align:right;font-size:4.6pt;opacity:.55;margin-top:.3mm}
+.msg--in{background:#1C2925;border-top-left-radius:.8mm}
+.msg--out{justify-self:end;background:#1E5C45;border-top-right-radius:.8mm}
+
+/* Back */
+.back{background:var(--paper);color:var(--ink)}
+.back .safe{display:grid;grid-template-columns:1fr 19mm;gap:4mm;align-items:center}
+.back__name{font:800 9pt var(--font-head);letter-spacing:-.03em}
+.back__name span{display:block;margin-top:.4mm;font:500 6pt var(--font-ui);letter-spacing:0;color:var(--ink-2)}
+.contacts{margin:3.2mm 0 0;padding:2.6mm 0 0;border-top:.25mm solid var(--line);list-style:none;display:grid;gap:1.5mm}
+.contacts li{display:grid;grid-template-columns:3.2mm 1fr;gap:1.6mm;align-items:center}
+.contacts svg{width:3.2mm;height:3.2mm;color:var(--mint-deep)}
+.contacts .num{font-size:7.4pt}
+.contacts small{display:block;font-size:5.4pt;line-height:1.2;color:var(--ink-3)}
+.contacts .mail{font-size:7pt;font-weight:500}
+.qr{display:grid;justify-items:center;gap:1.4mm;text-align:center}
+.qr img{display:block;width:19mm;height:19mm}
+.qr span{font-size:5.4pt;line-height:1.25;color:var(--ink-2)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo" viewBox="0 0 512 512">
+    <rect width="512" height="512" rx="112" fill="#0E1513"/>
+    <rect x="116" y="166" width="280" height="44" rx="22" fill="#84DDB7"/>
+    <rect x="116" y="210" width="28" height="136" rx="14" fill="#84DDB7" fill-opacity=".25"/>
+    <rect x="179" y="210" width="28" height="136" rx="14" fill="#84DDB7" fill-opacity=".25"/>
+    <rect x="242" y="210" width="28" height="136" rx="14" fill="#84DDB7"/>
+    <rect x="305" y="210" width="28" height="136" rx="14" fill="#84DDB7" fill-opacity=".25"/>
+    <rect x="368" y="210" width="28" height="136" rx="14" fill="#84DDB7" fill-opacity=".25"/>
+  </symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 3.6 6.7L4 20l1.3-3.5A8 8 0 0 1 4 12z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M6.5 3.5h3l1.5 4-2 1.5a11 11 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2 2A16 16 0 0 1 4.5 5.5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4.5 7l7.5 6 7.5-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+</svg>
+
+<!-- Front -->
+<section class="side front">
+  <div class="safe">
+    <div class="lead">
+      <span class="brand"><svg><use href="#logo"/></svg>Aldynala</span>
+      <h1>Запись клиентов в&nbsp;WhatsApp <em>без звонков</em> и&nbsp;вечерней переписки</h1>
+      <span class="kicker">Бот записи для салонов красоты</span>
+    </div>
+    <div class="chat" aria-hidden="true">
+      <p class="msg msg--in">Есть завтра окошко на маникюр после 17?<time>23:41</time></p>
+      <p class="msg msg--out">Да, 17:30 у Айгуль. Записать вас?<time>23:41</time></p>
+      <p class="msg msg--in">Да, давайте<time>23:42</time></p>
+    </div>
+  </div>
+</section>
+
+<!-- Back -->
+<section class="side back">
+  <div class="safe">
+    <div>
+      <p class="back__name">Aldynala<span>Покажем, как работает, за 10 минут</span></p>
+      <ul class="contacts">
+        <li><svg><use href="#i-chat"/></svg><p><span class="num">+996 707 160 409</span><small>WhatsApp, Telegram, звонки</small></p></li>
+        <li><svg><use href="#i-phone"/></svg><p><span class="num">+996 708 072 738</span></p></li>
+        <li><svg><use href="#i-mail"/></svg><p class="mail">timqshy@gmail.com</p></li>
+      </ul>
+    </div>
+    <div class="qr">
+      <img src="card-qr.svg" alt="QR: написать в WhatsApp">
+      <span>Наведите камеру —<br>откроется WhatsApp</span>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
