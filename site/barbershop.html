@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Онлайн-запись для барбершопа в WhatsApp и Telegram — Zapisbot</title>
+<meta name="description" content="Клиенты сами записываются к своему барберу в WhatsApp и Telegram, пока вы стрижёте. Напоминания, лист ожидания, барберов без ограничений. От 450 сом в месяц, первый месяц бесплатно.">
+<link rel="canonical" href="https://zapisbot.online/barbershop">
+<meta name="theme-color" content="#0A100E">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:site_name" content="Zapisbot">
+<meta property="og:url" content="https://zapisbot.online/barbershop">
+<meta property="og:title" content="Онлайн-запись в барбершоп прямо в WhatsApp">
+<meta property="og:description" content="Клиент пишет «есть завтра к Тимуру?» и сам записывается. Барберов сколько угодно, от 450 сом в месяц, первый месяц бесплатно.">
+<meta property="og:image" content="https://zapisbot.online/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="/page.css">
+<script src="/site.js" defer></script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Zapisbot", "item": "https://zapisbot.online/" },
+        { "@type": "ListItem", "position": 2, "name": "Барбершопам", "item": "https://zapisbot.online/barbershop" }
+      ]
+    },
+    {
+      "@type": "Service",
+      "name": "Онлайн-запись для барбершопа в WhatsApp и Telegram",
+      "serviceType": "Бот записи клиентов",
+      "provider": { "@type": "Organization", "@id": "https://zapisbot.online/#org", "name": "Zapisbot", "url": "https://zapisbot.online/" },
+      "areaServed": "KG",
+      "audience": { "@type": "BusinessAudience", "audienceType": "Барбершопы и барберы" },
+      "offers": { "@type": "AggregateOffer", "priceCurrency": "KGS", "lowPrice": "450", "highPrice": "1490" }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-wa" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></symbol>
+  <symbol id="i-tg" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-logo" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#0E1513" stroke="none"/><rect x="116" y="166" width="280" height="44" rx="22" fill="#84DDB7" stroke="none"/><rect x="116" y="210" width="28" height="136" rx="14" fill="#84DDB7" fill-opacity=".25" stroke="none"/><rect x="179" y="210" width="28" height="136" rx="14" fill="#84DDB7" fill-opacity=".25" stroke="none"/><rect x="242" y="210" width="28" height="136" rx="14" fill="#84DDB7" stroke="none"/><rect x="305" y="210" width="28" height="136" rx="14" fill="#84DDB7" fill-opacity=".25" stroke="none"/><rect x="368" y="210" width="28" height="136" rx="14" fill="#84DDB7" fill-opacity=".25" stroke="none"/></symbol>
+</svg>
+
+<header class="hdr">
+  <div class="wrap hdr__in">
+    <a class="logo" href="/" aria-label="Zapisbot, на главную"><svg aria-hidden="true"><use href="#i-logo"/></svg><span>Zapis<b>bot</b></span></a>
+    <nav class="nav" aria-label="Разделы">
+      <a href="#how">Как работает</a>
+      <a href="#fit">Тарифы</a>
+      <a href="#faq">Вопросы</a>
+    </nav>
+    <a class="btn btn--primary btn--sm" data-wa="Здравствуйте! У нас барбершоп, хотим попробовать бота записи месяц бесплатно." data-place="header" href="#contact">Попробовать</a>
+  </div>
+</header>
+
+<main>
+
+<section class="hero">
+  <div class="hero__bg" aria-hidden="true"><div class="hero__grid"></div><div class="blob blob--1"></div><div class="blob blob--2"></div></div>
+  <div class="wrap">
+    <ol class="crumbs"><li><a href="/">Zapisbot</a></li><li aria-current="page">Барбершопам</li></ol>
+    <div class="hero__in">
+      <div>
+        <span class="eyebrow"><span class="pulse"></span>Бот записи для барбершопов</span>
+        <h1>Онлайн-запись в барбершоп <span class="hl">прямо в WhatsApp</span></h1>
+        <p class="lead">Клиент пишет «есть завтра к Тимуру?» и сразу видит свободное время. Бот записывает его к нужному барберу, накануне и за два часа напоминает о стрижке. Вы стрижёте и не отвечаете в директ с машинкой в руке.</p>
+        <div class="hero__cta">
+          <a class="btn btn--primary" data-wa="Здравствуйте! У нас барбершоп, хотим попробовать бота записи месяц бесплатно." data-place="hero" href="#contact"><svg class="ico" aria-hidden="true"><use href="#i-wa"/></svg>Попробовать месяц бесплатно</a>
+          <a class="btn btn--ghost" href="#fit">Цены от 450 сом</a>
+        </div>
+        <a class="demo-link" data-demo data-place="hero" href="#contact" hidden>Или запишитесь сами в демо-салон<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <ul class="ticks">
+          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Подключаем за 1 день</li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Барберов сколько угодно</li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Клиенту не нужно приложение</li>
+        </ul>
+      </div>
+
+      <figure class="stage" style="margin:0">
+        <div class="phone">
+          <div class="screen">
+            <div class="island"></div>
+            <div class="sbar"><span>22:48</span><span class="sbar__r"><i></i><i></i></span></div>
+            <div class="wa-h">
+              <svg class="ico" aria-hidden="true"><use href="#i-back"/></svg>
+              <div class="wa-av">К</div>
+              <div><div class="wa-name">Барбершоп «Кайчы»</div><div class="wa-st">онлайн</div></div>
+            </div>
+            <div class="chat">
+              <div class="msg msg--me" style="--i:0">Здравствуйте! Есть завтра после работы к Тимуру? Стрижка и борода<time>22:47</time></div>
+              <div class="msg msg--bot" style="--i:1">Здравствуйте! Вечером <span data-day="1">завтра</span> у Тимура свободно 18:30, 19:15 и 20:00. Стрижка + борода — 900 сом, 45 мин. Во сколько удобно?<time>22:47</time></div>
+              <div class="msg msg--me" style="--i:2">давайте в 19:15, я Азамат<time>22:48</time></div>
+              <div class="msg msg--bot" style="--i:3">Готово, Азамат! Вы записаны к Тимуру: стрижка + борода, <span data-day="1">завтра</span>, 19:15 – 20:00.
+Номер записи #2318. До встречи! 👋<time>22:48</time></div>
+            </div>
+            <div class="wa-in" aria-hidden="true"><span>Сообщение</span><i><svg class="ico"><use href="#i-mic"/></svg></i></div>
+          </div>
+        </div>
+        <div class="pcard" style="--i:4" aria-hidden="true">
+          <div class="pcard__k"><span class="pulse"></span>Панель барбершопа · новая запись</div>
+          <div class="pcard__row"><b>19:15</b><span>Стрижка + борода · Тимур<br>из WhatsApp, в 22:48</span></div>
+        </div>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+    <div class="head rv">
+      <p class="kicker">Знакомо?</p>
+      <h2>Пока барбер стрижёт, клиент уходит к тем, кто ответил первым</h2>
+    </div>
+    <div class="pains">
+      <article class="pain rv"><span class="pain__n">18:00</span><h3>Пишут в самый разгар</h3><p>Вечером в директ и WhatsApp сыпется «есть сегодня?». Ответили через час, а клиент уже записался в барбершоп напротив.</p></article>
+      <article class="pain rv"><span class="pain__n">45 мин</span><h3>Пустое кресло</h3><p>Клиент забыл про стрижку и не пришёл. Окно пропало, а найти кого-то за полчаса до начала некем.</p></article>
+      <article class="pain rv"><span class="pain__n">2 → 1</span><h3>Двое на одно время</h3><p>Один барбер записал в тетрадь, другой ответил в директе. Кто-то ждёт, кто-то уходит недовольным.</p></article>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec--tight" id="how">
+  <div class="wrap">
+    <div class="head rv">
+      <p class="kicker">Как это работает</p>
+      <h2>Бот ведёт запись за администратора</h2>
+      <p class="sub">Клиент пишет в WhatsApp или Telegram барбершопа, как привык. Бот выбирает с ним услугу, барбера и время, а вы видите все записи в панели.</p>
+    </div>
+    <div class="feats">
+      <article class="feat rv"><svg class="ico" aria-hidden="true"><use href="#i-users"/></svg><h3>У каждого барбера своё расписание</h3><p>Клиент выбирает своего мастера и видит только его свободное время. Барберов добавляйте сколько нужно, цена не меняется.</p></article>
+      <article class="feat rv"><svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg><h3>Напоминание накануне и за 2 часа</h3><p>А за три дня бот спрашивает «Подтверждаете запись?». Клиент ответил «2», запись отменена, время снова свободно.</p></article>
+      <article class="feat rv"><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg><h3>Отменили — окно не пропадёт</h3><p>Кто стоит в листе ожидания к этому барберу на этот день, первым получает сообщение и записывается одной цифрой.</p></article>
+      <article class="feat rv"><svg class="ico" aria-hidden="true"><use href="#i-cal"/></svg><h3>Пришёл без записи — внесите в панель</h3><p>Клиентов с улицы и по телефону добавляете за пару нажатий, и бот не предложит это время другим. Часы под живую очередь можно закрыть заранее.</p></article>
+      <article class="feat rv"><svg class="ico" aria-hidden="true"><use href="#i-moon"/></svg><h3>Записывает ночью и в выходные</h3><p>Решил постричься в 23:00 и записался в 23:01. Утром запись уже в панели, подтверждать ничего не нужно.</p></article>
+      <article class="feat rv"><svg class="ico" aria-hidden="true"><use href="#i-msg"/></svg><h3>Понимает обычные сообщения</h3><p>«Есть после работы к Тимуру?», «давайте попозже», «перенесите на субботу»: цифрами отвечать не нужно. Цены и адрес бот называет по вашему прайсу и справке, на русском и кыргызском.</p></article>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec--tight" id="fit">
+  <div class="wrap">
+    <div class="head rv">
+      <p class="kicker">Тарифы</p>
+      <h2>Цена не зависит от числа барберов</h2>
+    </div>
+    <div class="fit">
+      <article class="plan rv">
+        <p class="plan__who">Барбер работает один</p>
+        <h3>Мастер</h3>
+        <p class="price"><b>450</b><span>сом в месяц</span></p>
+        <p>Запись в WhatsApp и Telegram, напоминания, лист ожидания, ответы на вопросы. Для одного мастера.</p>
+      </article>
+      <article class="plan plan--hot rv">
+        <p class="plan__who">Барбершоп с командой<em>Цена запуска</em></p>
+        <h3>Салон</h3>
+        <p class="price"><b>690</b><s>990</s><span>сом в месяц</span></p>
+        <p>Барберов сколько угодно, пятый барбер стоит столько же, сколько первый. 690 сом — цена запуска для первых 10 салонов, при продлении она не растёт.</p>
+      </article>
+    </div>
+    <p class="fit__note rv">Первый месяц и подключение бесплатно. Автоответчик в Instagram входит в тариф «Салон+» за 1 490 сом. <a href="/#pricing">Все тарифы и оплата за год</a></p>
+  </div>
+</section>
+
+<section class="sec sec--tight" id="faq">
+  <div class="wrap split">
+    <div class="split__head rv">
+      <p class="kicker">Вопросы</p>
+      <h2>Что спрашивают барбершопы</h2>
+      <p class="sub">Не нашли ответ — напишите, ответим лично.</p>
+    </div>
+    <div class="faq rv">
+      <details><summary>Клиент может выбрать своего барбера?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Да. Бот спрашивает, к кому записаться, и показывает свободное время только этого барбера. Если клиенту всё равно, он выбирает любого из списка.</p></div></details>
+      <details><summary>Как быть с клиентами без записи?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Посадили клиента в кресло — добавьте запись в панели, и бот не предложит это время другим. Если держите часы под живую очередь, закройте их в панели заранее.</p></div></details>
+      <details><summary>Сколько стоит, если у нас шесть барберов?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>На тарифе «Салон» 990 сом в месяц, для первых десяти салонов 690. Число барберов на цену не влияет.</p></div></details>
+      <details><summary>Клиент хочет перенести запись. Что делать?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Ничего. Клиент пишет боту «перенесите на субботу», бот находит его запись и предлагает свободное время у того же барбера.</p></div></details>
+      <details><summary>Клиенты пишут в Instagram. Бот там отвечает?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>На тарифе «Салон+» бот отвечает в директе и на комментарии под постами по вашей справке: цены, адрес, как записаться. Записывает клиентов он в WhatsApp и Telegram.</p></div></details>
+      <details><summary>Что нужно от нас для подключения?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Прайс, список барберов и их рабочие часы. Остальное настраиваем сами за один рабочий день, и первый месяц вы пользуетесь бесплатно.</p></div></details>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec--tight" id="contact">
+  <div class="wrap">
+    <div class="final rv">
+      <div class="ribbons" aria-hidden="true">
+        <div class="ribbon"><span>✓ Стрижка · 19:15</span><span>✓ Борода · 12:00</span><span>✓ Fade · 18:30</span><span>✓ Стрижка + борода · 20:00</span><span>✓ Детская стрижка · 16:00</span><span>✓ Бритьё · 11:30</span><span>✓ Стрижка · 19:15</span><span>✓ Борода · 12:00</span><span>✓ Fade · 18:30</span><span>✓ Стрижка + борода · 20:00</span><span>✓ Детская стрижка · 16:00</span><span>✓ Бритьё · 11:30</span></div>
+        <div class="ribbon ribbon--rev"><span>✓ Камуфляж седины · 17:00</span><span>✓ Стрижка машинкой · 10:00</span><span>✓ Укладка · 18:45</span><span>✓ Борода · 13:30</span><span>✓ Стрижка · 21:00</span><span>✓ Fade · 15:15</span><span>✓ Камуфляж седины · 17:00</span><span>✓ Стрижка машинкой · 10:00</span><span>✓ Укладка · 18:45</span><span>✓ Борода · 13:30</span><span>✓ Стрижка · 21:00</span><span>✓ Fade · 15:15</span></div>
+      </div>
+      <p class="kicker">Первый месяц бесплатно</p>
+      <h2>Покажем за 10 минут, как бот записывает в барбершоп</h2>
+      <p class="sub">Напишите, когда удобно. Подключим за один рабочий день, и месяц вы пользуетесь без оплаты.</p>
+      <div class="final__cta">
+        <a class="btn btn--primary" data-wa="Здравствуйте! У нас барбершоп, покажите, пожалуйста, как работает бот записи." data-place="final" href="#contact"><svg class="ico" aria-hidden="true"><use href="#i-wa"/></svg>Написать в WhatsApp</a>
+        <a class="btn btn--ghost" data-tg data-place="final" href="#contact"><svg class="ico" aria-hidden="true"><use href="#i-tg"/></svg>Написать в Telegram</a>
+      </div>
+      <a class="demo-link" data-demo data-place="final" href="#contact" hidden>Или запишитесь сами в демо-салон<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec--tight" aria-labelledby="more-h">
+  <div class="wrap">
+    <p class="kicker" id="more-h">Бот записи и для других</p>
+    <div class="more">
+      <a href="/manicure">Мастерам маникюра<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      <a href="/brows-lashes">Бровистам и лэшмейкерам<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      <a href="/cosmetology">Косметологам<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      <a href="/">Салонам красоты<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="ftr">
+  <div class="wrap ftr__in">
+    <a class="logo" href="/"><svg aria-hidden="true"><use href="#i-logo"/></svg><span>Zapis<b>bot</b></span></a>
+    <nav class="ftr__col" aria-label="Для кого">
+      <p class="ftr__h">Для кого</p>
+      <a href="/barbershop" aria-current="page">Барбершопам</a>
+      <a href="/manicure">Мастерам маникюра</a>
+      <a href="/brows-lashes">Бровистам и лэшмейкерам</a>
+      <a href="/cosmetology">Косметологам</a>
+    </nav>
+    <nav class="ftr__col" aria-label="Ссылки">
+      <p class="ftr__h">Zapisbot</p>
+      <a href="/#pricing">Цены</a>
+      <a href="/#faq">Вопросы</a>
+      <a href="https://admin.zapisbot.online/">Вход для салонов</a>
+      <a href="/privacy">Конфиденциальность</a>
+    </nav>
+    <nav class="ftr__col" aria-label="Контакты">
+      <p class="ftr__h">Связаться</p>
+      <a data-wa="Здравствуйте!" data-place="footer" data-wa-label href="#contact">WhatsApp</a>
+      <a data-tg data-place="footer" data-tg-label href="#contact">Telegram</a>
+    </nav>
+    <p class="ftr__copy">© 2026 Zapisbot. Бот записи для барбершопов и салонов красоты, Бишкек.</p>
+  </div>
+</footer>
+
+</body>
+</html>

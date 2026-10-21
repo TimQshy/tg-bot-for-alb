@@ -1,0 +1,84 @@
+# Landing page on the root domain: static files from ./site, nothing proxied.
+#
+# Not a .conf yet on purpose. nginx refuses to start when a listed
+# certificate is missing, and this file sits in the directory mounted as
+# conf.d, so enabling it before the certificate exists would take the admin
+# panel down with it. Order: DNS, certificate, then
+# `cp nginx/site.conf.example nginx/site.conf` — see site/README.md.
+#
+# Cache headers go through `expires`, not add_header: an add_header inside a
+# location drops every add_header inherited from the server block, and the
+# security headers below would silently disappear on those responses.
+
+server {
+    listen 80;
+    server_name zapisbot.online www.zapisbot.online;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    location / {
+        return 301 https://zapisbot.online$request_uri;
+    }
+}
+
+# One canonical host for search engines: www answers with a permanent redirect.
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name www.zapisbot.online;
+
+    ssl_certificate     /etc/letsencrypt/live/zapisbot.online/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/zapisbot.online/privkey.pem;
+
+    return 301 https://zapisbot.online$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name zapisbot.online;
+
+    ssl_certificate     /etc/letsencrypt/live/zapisbot.online/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/zapisbot.online/privkey.pem;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    root /srv/site;
+    index index.html;
+    charset utf-8;
+
+    gzip on;
+    gzip_types text/css application/javascript image/svg+xml application/xml text/plain;
+
+    # A real 404 status with a page that links back into the site, so a
+    # stale link neither gets indexed nor strands the visitor.
+    error_page 404 /404.html;
+
+    # Links with .html go to the clean URL, so search engines see one address
+    # per page. Matched on $request_uri, what the visitor actually asked for:
+    # nginx's own internal hops to /index.html and /404.html keep the original
+    # value and are left alone (a location on \.html$ would loop the home page).
+    if ($request_uri ~ "^/index\.html(\?.*)?$") { return 301 /$1; }
+    if ($request_uri ~ "^/(.+)\.html(\?.*)?$")  { return 301 /$1$2; }
+
+    # /privacy serves privacy.html, so the canonical URLs carry no extension.
+    # `expires epoch` makes browsers revalidate every time: a changed price or
+    # contact in site.js reaches everyone on the next visit.
+    location / {
+        try_files $uri $uri.html $uri/ =404;
+        expires epoch;
+    }
+
+    location ~* \.(?:png|svg|ico|webp|jpg)$ {
+        expires 7d;
+    }
+
+    # site/README.md is deploy notes, not a page.
+    location ~* \.md$ {
+        return 404;
+    }
+}

@@ -45,6 +45,7 @@ services:
     volumes:
       - ./nginx:/etc/nginx/conf.d:ro
       - ./public:/srv/admin:ro
+      - ./site:/srv/site:ro
       - ./certbot/www:/var/www/certbot:ro
       - ./certbot/conf:/etc/letsencrypt:ro
     depends_on: [salon-aruuke]
