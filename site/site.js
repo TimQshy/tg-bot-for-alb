@@ -1,7 +1,7 @@
 // Shared by every page of the site, loaded with `defer`. Contacts and the
 // GA4 ID are filled in here once and apply everywhere.
 window.SITE = {
-  whatsapp: 'WHATSAPP_NUMBER',   // number for wa.me, digits only: 996700123456
+  whatsapp: '996707160409',      // number for wa.me, digits only: 996700123456
   telegram: 'TELEGRAM_USERNAME', // Telegram username without @
   ga: 'G-XXXXXXXXXX',            // GA4 measurement ID
   demo: '',                      // optional: a demo salon's bot people can book with themselves, https://t.me/... or https://wa.me/...
@@ -43,8 +43,10 @@ window.SITE = {
     if (waSet) external(a, 'https://wa.me/' + SITE.whatsapp + '?text=' + encodeURIComponent(a.dataset.wa));
     a.addEventListener('click', function () { track('contact_click', { channel: 'whatsapp', place: a.dataset.place }); });
   });
+  // Without a username a Telegram button has nowhere to go, so it is removed.
   $$('[data-tg]').forEach(function (a) {
-    if (tgSet) external(a, 'https://t.me/' + SITE.telegram);
+    if (!tgSet) { a.remove(); return; }
+    external(a, 'https://t.me/' + SITE.telegram);
     a.addEventListener('click', function () { track('contact_click', { channel: 'telegram', place: a.dataset.place }); });
   });
   // Hidden in the markup: without a demo bot there is nothing to show.

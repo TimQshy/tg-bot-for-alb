@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Бот записи клиентов в WhatsApp и Telegram для салонов красоты — Zapisbot</title>
-<meta name="description" content="Клиенты записываются сами в WhatsApp и Telegram: бот предлагает услугу, мастера и свободное время, напоминает о визите. Цена в сомах, мастеров без ограничений. Первый месяц бесплатно.">
+<title>Бот записи клиентов в WhatsApp для салонов красоты — Zapisbot</title>
+<meta name="description" content="Клиенты записываются сами в WhatsApp: бот предлагает услугу, мастера и свободное время, напоминает о визите. Цена в сомах, мастеров без ограничений, подключение бесплатно.">
 <link rel="canonical" href="https://zapisbot.online/">
 <meta name="theme-color" content="#0A100E">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -15,7 +15,7 @@
 <meta property="og:site_name" content="Zapisbot">
 <meta property="og:url" content="https://zapisbot.online/">
 <meta property="og:title" content="Клиенты записываются сами — прямо в WhatsApp">
-<meta property="og:description" content="Бот записи для салонов красоты и мастеров. WhatsApp и Telegram, напоминания, лист ожидания. От 450 сом в месяц, первый месяц бесплатно.">
+<meta property="og:description" content="Бот записи для салонов красоты и мастеров. Запись в WhatsApp, напоминания, лист ожидания. От 450 сом в месяц, подключение бесплатно.">
 <meta property="og:image" content="https://zapisbot.online/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -45,8 +45,8 @@
       "@type": "SoftwareApplication",
       "name": "Zapisbot",
       "applicationCategory": "BusinessApplication",
-      "operatingSystem": "Web, WhatsApp, Telegram",
-      "description": "Бот записи клиентов в WhatsApp и Telegram для салонов красоты и мастеров: запись, напоминания, лист ожидания, панель владельца.",
+      "operatingSystem": "Web, WhatsApp",
+      "description": "Бот записи клиентов в WhatsApp для салонов красоты и мастеров: запись, напоминания, лист ожидания, панель владельца.",
       "publisher": { "@id": "https://zapisbot.online/#org" },
       "offers": {
         "@type": "AggregateOffer",
@@ -500,20 +500,6 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
 .step p{color:var(--ink-2)}
 .step__when{display:inline-block;margin-bottom:10px;font:500 12px var(--font-num);letter-spacing:.06em;text-transform:uppercase;color:var(--mint)}
 
-/* WhatsApp ways */
-.ways{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media (max-width:880px){.ways{grid-template-columns:1fr}}
-.way{padding:32px;border-radius:var(--r);background:var(--card);box-shadow:inset 0 0 0 1px var(--line)}
-.way--hl{background:linear-gradient(160deg,rgba(132,221,183,.13),var(--card) 55%);box-shadow:inset 0 0 0 1px rgba(132,221,183,.28)}
-.way__top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px}
-.way h3{font-size:24px;letter-spacing:-.03em}
-.pill{padding:5px 12px;border-radius:999px;background:rgba(233,243,239,.07);font-size:13px;font-weight:500;color:var(--ink-2)}
-.way--hl .pill{background:var(--mint);color:var(--on-mint)}
-.way > p{margin-bottom:20px;color:var(--ink-2)}
-.way ul{display:grid;gap:12px;margin:0;padding:0;list-style:none;font-size:15px}
-.way li{display:flex;gap:10px}
-.way li .ico{width:18px;height:18px;margin-top:3px;color:var(--mint)}
-
 /* FAQ */
 .faq details{border-bottom:1px solid var(--line-2)}
 .faq details:first-child{border-top:1px solid var(--line-2)}
@@ -599,7 +585,7 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
       <a href="#start">Подключение</a>
       <a href="#faq">Вопросы</a>
     </nav>
-    <a class="btn btn--primary btn--sm" data-wa="Здравствуйте! Хочу попробовать бота записи месяц бесплатно." data-place="header" href="#contact">Попробовать</a>
+    <a class="btn btn--primary btn--sm" data-wa="Здравствуйте! Хочу узнать про бота записи." data-place="header" href="#contact">Написать</a>
   </div>
 </header>
 
@@ -614,7 +600,7 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
       <h1>Клиенты записываются сами <span class="rot"><span class="rot__w" id="rot">в WhatsApp</span></span></h1>
       <p class="lead">Клиент пишет вашему салону в WhatsApp обычными словами, как администратору. Бот понимает, подбирает услугу, мастера и свободное время, записывает и накануне напоминает о визите. Вы видите всё в панели.</p>
       <div class="hero__cta">
-        <a class="btn btn--primary" data-wa="Здравствуйте! Хочу попробовать бота записи месяц бесплатно." data-place="hero" href="#contact"><svg class="ico" aria-hidden="true"><use href="#i-wa"/></svg>Попробовать месяц бесплатно</a>
+        <a class="btn btn--primary" data-wa="Здравствуйте! Покажите, пожалуйста, как работает бот записи." data-place="hero" href="#contact"><svg class="ico" aria-hidden="true"><use href="#i-wa"/></svg>Покажем за 10 минут</a>
         <a class="btn btn--ghost" href="#pricing">Цены от 450 сом</a>
       </div>
       <a class="demo-link" data-demo data-place="hero" href="#contact" hidden>Или запишитесь сами в демо-салон<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
@@ -688,7 +674,7 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
       <h2>Запись в пару сообщений. Без звонков и приложений</h2>
     </div>
     <div class="flow">
-      <article class="flow__s rv"><span class="flow__n">01</span><h3>Пишет вам в WhatsApp или Telegram</h3><p>Как привык. Не нужно ставить приложение, регистрироваться или искать сайт.</p></article>
+      <article class="flow__s rv"><span class="flow__n">01</span><h3>Пишет вам в WhatsApp</h3><p>Как привык. Не нужно ставить приложение, регистрироваться или искать сайт.</p></article>
       <article class="flow__s rv" style="--d:.08s"><span class="flow__n">02</span><h3>Пишет своими словами</h3><p>«Завтра после обеда», «к Айгерим», «давайте пораньше». Бот понимает и предлагает только свободное время.</p></article>
       <article class="flow__s rv" style="--d:.16s"><span class="flow__n">03</span><h3>Запись уже в вашей панели</h3><p>Накануне клиенту уходит напоминание. Вы ничего не делаете.</p></article>
     </div>
@@ -732,9 +718,9 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
   <div class="wrap">
     <div class="facts rv">
       <div class="fact"><b><span data-count="1">1</span> <small>день</small></b><span>на подключение, настраиваем сами</span></div>
-      <div class="fact"><b><span data-count="0">0</span> <small>сом</small></b><span>за сообщения в WhatsApp при стандартном подключении</span></div>
+      <div class="fact"><b><span data-count="0">0</span> <small>сом</small></b><span>за сообщения клиентам в WhatsApp</span></div>
       <div class="fact"><b>∞</b><span>мастеров на тарифе «Салон», цена та же</span></div>
-      <div class="fact"><b><span data-count="30">30</span> <small>дней</small></b><span>бесплатно на старте, без оплаты вперёд</span></div>
+      <div class="fact"><b><span data-count="10">10</span> <small>минут</small></b><span>покажем, как бот работает у настоящего салона</span></div>
     </div>
   </div>
 </section>
@@ -902,7 +888,7 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
         <thead><tr><th scope="col"><span class="sr">Что сравниваем</span></th><th scope="col" class="us">Мы, «Салон»</th><th scope="col">Другие сервисы</th></tr></thead>
         <tbody>
           <tr><th scope="row">Цена за студию из 4 мастеров</th><td class="us" data-h="Мы"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>990 сом</td><td data-h="Другие">от 1 750 сом, растёт с числом мастеров</td></tr>
-          <tr><th scope="row">Запись прямо в WhatsApp и Telegram</th><td class="us" data-h="Мы"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>да</td><td data-h="Другие">не везде</td></tr>
+          <tr><th scope="row">Запись прямо в WhatsApp</th><td class="us" data-h="Мы"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>да</td><td data-h="Другие">не везде</td></tr>
           <tr><th scope="row">Клиенту нужно ставить приложение</th><td class="us" data-h="Мы"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>нет</td><td data-h="Другие">часто да</td></tr>
           <tr><th scope="row">Цена в сомах</th><td class="us" data-h="Мы"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>да</td><td data-h="Другие">часто в долларах или рублях</td></tr>
           <tr><th scope="row">Сообщения WhatsApp</th><td class="us" data-h="Мы"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>бесплатно</td><td data-h="Другие">оплачиваются отдельно</td></tr>
@@ -936,13 +922,13 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
         <div class="price"><span class="price__val num" data-m="450" data-y="4 500">450</span><span class="price__old num" data-m="" data-y="5 400"></span><span class="price__per" data-m="сом в месяц" data-y="сом за год">сом в месяц</span></div>
         <p class="plan__note" data-m="" data-y="≈ 375 сом в месяц: 10 месяцев вместо 12."></p>
         <ul>
-          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Запись в WhatsApp и Telegram</li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Запись в WhatsApp</li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Панель, напоминания, лист ожидания</li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Ответы на вопросы клиентов</li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>1 мастер</li>
           <li class="no"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg>Автоответчик в Instagram</li>
         </ul>
-        <a class="btn btn--ghost" data-wa="Здравствуйте! Интересует тариф «Мастер»." data-place="plan_master" href="#contact">Попробовать бесплатно</a>
+        <a class="btn btn--ghost" data-wa="Здравствуйте! Интересует тариф «Мастер»." data-place="plan_master" href="#contact">Подключить</a>
       </article>
 
       <article class="plan plan--hot rv" style="--d:.08s">
@@ -952,7 +938,7 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
         <div class="price"><span class="price__val num" data-m="690" data-y="6 900">690</span><span class="price__old num" data-m="990" data-y="8 280">990</span><span class="price__per" data-m="сом в месяц" data-y="сом за год">сом в месяц</span></div>
         <p class="plan__note" data-m="Цена фиксируется и не растёт при продлении, пока вы с нами. Обычная цена — 990 сом." data-y="≈ 575 сом в месяц. Обычная цена за год — 9 900 сом вместо 11 880.">Цена фиксируется и не растёт при продлении, пока вы с нами. Обычная цена — 990 сом.</p>
         <ul>
-          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Запись в WhatsApp и Telegram</li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Запись в WhatsApp</li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Панель, напоминания, лист ожидания</li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Ответы на вопросы клиентов</li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Мастеров без ограничений</li>
@@ -973,20 +959,20 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>«+» под постом — ответ в директ</li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Справку для ответов настроим сами</li>
         </ul>
-        <a class="btn btn--ghost" data-wa="Здравствуйте! Интересует тариф «Салон+» с Instagram." data-place="plan_plus" href="#contact">Попробовать бесплатно</a>
+        <a class="btn btn--ghost" data-wa="Здравствуйте! Интересует тариф «Салон+» с Instagram." data-place="plan_plus" href="#contact">Подключить</a>
       </article>
     </div>
 
     <div class="perks">
-      <div class="perk rv"><svg class="ico" aria-hidden="true"><use href="#i-gift"/></svg><h3>Первый месяц бесплатно</h3><p>Месяц пользуетесь без оплаты. В конце вместе смотрим, сколько записей пришло через бота, и вы решаете, оставаться ли.</p></div>
-      <div class="perk rv" style="--d:.06s"><svg class="ico" aria-hidden="true"><use href="#i-zap"/></svg><h3>Подключение бесплатно</h3><p>Заводим услуги и мастеров по вашему прайсу. От вас — только прайс и часы работы.</p></div>
+      <div class="perk rv"><svg class="ico" aria-hidden="true"><use href="#i-zap"/></svg><h3>Подключение бесплатно</h3><p>Заводим услуги и мастеров по вашему прайсу. От вас — только прайс и часы работы.</p></div>
+      <div class="perk rv" style="--d:.06s"><svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg><h3>Данные остаются вашими</h3><p>Решите уйти — отдаём записи и базу клиентов таблицей, ничего не теряется.</p></div>
       <div class="perk rv" style="--d:.12s"><svg class="ico" aria-hidden="true"><use href="#i-cal"/></svg><h3>Год вперёд — 10 месяцев вместо 12</h3><p>«Салон» выходит 9 900 сом вместо 11 880, а по цене запуска — 6 900 вместо 8 280.</p></div>
       <div class="perk rv" style="--d:.18s"><svg class="ico" aria-hidden="true"><use href="#i-users"/></svg><h3>Приведите другой салон</h3><p>Когда он оплатит первый месяц, вам — месяц бесплатно.</p></div>
     </div>
 
     <div class="extras rv">
       <div class="extra"><span>Перенос базы клиентов из таблицы или другого сервиса</span><b>1 000 сом<br>разово</b></div>
-      <div class="extra"><span>Официальный WhatsApp Business API, <a href="#whatsapp">подробнее</a></span><b>2 500 сом разово<br>+ 500 сом/мес</b></div>
+      <div class="extra"><span>Официальное подключение WhatsApp (WhatsApp Business API)</span><b>2 500 сом разово<br>+ 500 сом/мес</b></div>
     </div>
   </div>
 </section>
@@ -1001,43 +987,11 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
       <div class="hero__cta"><a class="btn btn--primary" data-wa="Здравствуйте! Хочу подключить бота записи." data-place="steps" href="#contact"><svg class="ico" aria-hidden="true"><use href="#i-wa"/></svg>Написать в WhatsApp</a></div>
     </div>
     <ol class="steps" id="steps">
-      <li class="step"><span class="step__dot">1</span><span class="step__when">День 1</span><h3>Вы пишете нам</h3><p>В WhatsApp или Telegram. Покажем, как бот работает у настоящего салона, за 10 минут.</p></li>
+      <li class="step"><span class="step__dot">1</span><span class="step__when">День 1</span><h3>Вы пишете нам</h3><p>В WhatsApp или по телефону. Покажем, как бот работает у настоящего салона, за 10 минут.</p></li>
       <li class="step"><span class="step__dot">2</span><span class="step__when">День 1</span><h3>Присылаете прайс, мастеров и часы работы</h3><p>В любом виде: фото, таблица, список в сообщении.</p></li>
       <li class="step"><span class="step__dot">3</span><span class="step__when">В течение рабочего дня</span><h3>Подключаем бота</h3><p>Присылаем ссылку на панель и делаем тестовую запись вместе с вами.</p></li>
       <li class="step"><span class="step__dot">4</span><span class="step__when">Через 3 дня и через 2 недели</span><h3>Спрашиваем, что неудобно</h3><p>Правим то, что мешает. Через 2 недели присылаем, сколько записей пришло через бота.</p></li>
-      <li class="step"><span class="step__dot">5</span><span class="step__when">Конец бесплатного месяца</span><h3>Вы решаете, оставаться ли</h3><p>За 3 дня до конца месяца пишем про оплату. Не подходит — просто не платите, данные отдаём таблицей, ничего не теряется.</p></li>
     </ol>
-  </div>
-</section>
-
-<!-- ── WhatsApp ways ────────────────────────────────────── -->
-<section class="sec sec--tight" id="whatsapp">
-  <div class="wrap">
-    <div class="head rv">
-      <p class="kicker">WhatsApp</p>
-      <h2>Два способа подключить WhatsApp</h2>
-      <p class="sub">Рассказываем честно, чем они отличаются. Выбор за вами.</p>
-    </div>
-    <div class="ways">
-      <article class="way way--hl rv">
-        <div class="way__top"><h3>Стандартный</h3><span class="pill">входит в тариф</span></div>
-        <p>Номер салона подключается как связанное устройство, так же как WhatsApp Web. Сообщения бесплатны.</p>
-        <ul>
-          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Бот не пишет ночью, не рассылает рекламу незнакомым и выдерживает паузы, чтобы риск ограничений был минимальным.</li>
-          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Подключение неофициальное. Если WhatsApp ограничит номер, бот на время остановится, а мы поможем восстановить.</li>
-          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Записи при этом не пропадают: все они в панели, принимать клиентов можно руками, как раньше.</li>
-        </ul>
-      </article>
-      <article class="way rv" style="--d:.08s">
-        <div class="way__top"><h3>Официальный</h3><span class="pill">2 500 сом разово + 500 сом/мес</span></div>
-        <p>Через официальный WhatsApp Business API от Meta. Номер не может быть заблокирован за способ подключения.</p>
-        <ul>
-          <li><svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg>Сообщения салон оплачивает Meta напрямую, своей картой. Мы наценку не берём.</li>
-          <li><svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg>Для салона с 300 визитами в месяц это примерно 540–1 900 сом в месяц. До подключения считаем на ваших цифрах.</li>
-          <li><svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg>С 1 октября 2026 Meta берёт плату и за ответы клиентам, поэтому этот вариант выбирают, когда номер важнее экономии.</li>
-        </ul>
-      </article>
-    </div>
   </div>
 </section>
 
@@ -1050,13 +1004,13 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
       <p class="sub">Не нашли ответ — напишите, ответим лично.</p>
     </div>
     <div class="faq rv">
-      <details><summary>Клиенту нужно что-то устанавливать?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Нет. Клиент пишет в WhatsApp или Telegram салона, как обычно. Ни приложений, ни регистрации, ни сайта.</p></div></details>
+      <details><summary>Клиенту нужно что-то устанавливать?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Нет. Клиент пишет в WhatsApp салона, как обычно. Ни приложений, ни регистрации, ни сайта.</p></div></details>
       <details><summary>Клиенту нужно отвечать цифрами?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Нет. Записаться, перенести или отменить запись, спросить цену можно обычными словами: «завтра после обеда», «давайте пораньше», «перенесите на субботу». Бот понимает и отвечает как администратор.</p><p>Подтвердить визит или занять освободившееся окно можно одной цифрой из сообщения бота.</p></div></details>
       <details><summary>Сколько мастеров можно добавить?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>На тарифах «Салон» и «Салон+» — сколько угодно. Добавили пятого или десятого мастера, цена не изменилась. Тариф «Мастер» рассчитан на одного мастера.</p></div></details>
-      <details><summary>Нужно ли платить за сообщения в WhatsApp?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>При стандартном подключении — нет, сообщения бесплатны. При официальном WhatsApp Business API салон платит Meta напрямую: для салона с 300 визитами в месяц это примерно 540–1 900 сом в месяц. Мы наценку на сообщения не берём.</p></div></details>
-      <details><summary>Что будет, если WhatsApp ограничит номер?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Бот на время остановится, а мы поможем восстановить номер. Записи не пропадают: все они в панели, и принимать клиентов можно руками, как раньше.</p><p>Чтобы риск был минимальным, бот не пишет ночью, не рассылает рекламу незнакомым и выдерживает паузы. Если номер для вас важнее экономии, подключим официальный WhatsApp Business API.</p></div></details>
+      <details><summary>Нужно ли платить за сообщения в WhatsApp?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Нет, сообщения клиентам входят в тариф.</p></div></details>
       <details><summary>Бот отвечает на кыргызском?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Да. Бот отвечает на том языке, на котором пишет клиент: на русском или кыргызском. Названия услуг и имена мастеров не переводит.</p></div></details>
-      <details><summary>Что будет после бесплатного месяца?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>За 3 дня до конца месяца напишем про оплату. Не подходит — просто не оплачиваете. Данные отдаём таблицей, ничего не теряется.</p></div></details>
+      <details><summary>Можно закрыть день или часы мастера?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Да, в панели: выходной, отпуск, перерыв. Бот не предложит это время клиентам.</p></div></details>
+      <details><summary>Что будет с записями, если решим уйти?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Ничего не теряется: все записи и базу клиентов отдаём таблицей.</p></div></details>
       <details><summary>Как оплачивать?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Переводом в сомах, помесячно или за год вперёд. Счёт-подтверждение высылаем.</p></div></details>
       <details><summary>Можно перенести клиентов из таблицы или другого сервиса?<i><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></i></summary><div class="ans"><p>Да, перенос базы стоит 1 000 сом разово. Присылаете таблицу или выгрузку, мы переносим.</p></div></details>
     </div>
@@ -1072,9 +1026,9 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
         <div class="ribbon ribbon--rev"><span>✓ Массаж · 18:00</span><span>✓ Барбер · 12:00</span><span>✓ Чистка лица · 15:00</span><span>✓ Маникюр · 17:00</span><span>✓ Укладка · 09:30</span><span>✓ Ламинирование · 14:00</span><span>✓ Массаж · 18:00</span><span>✓ Барбер · 12:00</span><span>✓ Чистка лица · 15:00</span><span>✓ Маникюр · 17:00</span><span>✓ Укладка · 09:30</span><span>✓ Ламинирование · 14:00</span></div>
         <div class="ribbon"><span>✓ Педикюр · 10:00</span><span>✓ Брови · 19:00</span><span>✓ Стрижка · 16:30</span><span>✓ Маникюр · 12:30</span><span>✓ Ресницы · 11:00</span><span>✓ Массаж · 15:30</span><span>✓ Педикюр · 10:00</span><span>✓ Брови · 19:00</span><span>✓ Стрижка · 16:30</span><span>✓ Маникюр · 12:30</span><span>✓ Ресницы · 11:00</span><span>✓ Массаж · 15:30</span></div>
       </div>
-      <p class="kicker">Первый месяц бесплатно</p>
+      <p class="kicker">Подключение бесплатно</p>
       <h2>Покажем за 10 минут, как бот записывает клиентов</h2>
-      <p class="sub">Напишите, когда удобно. Подключим за один рабочий день, и месяц вы пользуетесь без оплаты.</p>
+      <p class="sub">Напишите, когда удобно. Подключим за один рабочий день, услуги и мастеров заведём сами.</p>
       <div class="final__cta">
         <a class="btn btn--primary" data-wa="Здравствуйте! Покажите, пожалуйста, как работает бот записи." data-place="final" href="#contact"><svg class="ico" aria-hidden="true"><use href="#i-wa"/></svg>Написать в WhatsApp</a>
         <a class="btn btn--ghost" data-tg data-place="final" href="#contact"><svg class="ico" aria-hidden="true"><use href="#i-tg"/></svg>Написать в Telegram</a>
@@ -1113,7 +1067,7 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
 </footer>
 
 <div class="dock" id="dock">
-  <a class="btn btn--primary" data-wa="Здравствуйте! Хочу попробовать бота записи месяц бесплатно." data-place="dock" href="#contact"><svg class="ico" aria-hidden="true"><use href="#i-wa"/></svg>Попробовать бесплатно</a>
+  <a class="btn btn--primary" data-wa="Здравствуйте! Покажите, пожалуйста, как работает бот записи." data-place="dock" href="#contact"><svg class="ico" aria-hidden="true"><use href="#i-wa"/></svg>Написать в WhatsApp</a>
   <a class="btn btn--ghost btn--icon" data-tg data-place="dock" href="#contact" aria-label="Написать в Telegram"><svg class="ico" aria-hidden="true"><use href="#i-tg"/></svg></a>
 </div>
 
@@ -1149,7 +1103,7 @@ h2{max-width:17em;margin-bottom:18px;font-size:clamp(32px,4.7vw,58px);line-heigh
   }
 
   // ── Rotating word in the headline ───────────────────────
-  var rot = $('#rot'), words = ['в WhatsApp', 'в Telegram', 'даже ночью', 'без звонков'], wi = 0;
+  var rot = $('#rot'), words = ['в WhatsApp', 'даже ночью', 'без звонков'], wi = 0;
   if (!reduced) setInterval(function () {
     if (document.hidden) return;
     rot.classList.add('is-out');
